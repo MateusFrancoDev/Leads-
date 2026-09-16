@@ -1,6 +1,6 @@
 /**
- * Log centralizado. Em producao so registra warn/error e nunca imprime
- * dados sensiveis (chaves, URLs com token) — passe apenas contexto util.
+ * Log centralizado. Em produção só registra warn/error e nunca imprime
+ * dados sensíveis (chaves, URLs com token) — passe apenas contexto útil.
  */
 
 type LogContext = Record<string, string | number | boolean | null | undefined>;

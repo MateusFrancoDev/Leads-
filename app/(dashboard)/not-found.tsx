@@ -2,13 +2,13 @@ import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState, Panel } from "@/components/ui/feedback";
 
-/** 404 dentro do painel: mantem a navegacao ao lado. */
+/** 404 dentro do painel: mantém a navegação ao lado. */
 export default function DashboardNotFound() {
   return (
     <Panel>
       <EmptyState
-        title="Nao encontramos essa pagina"
-        description="O lead ou a lista pode ter sido removido, ou o endereco esta errado."
+        title="Não encontramos essa página"
+        description="O lead ou a lista pode ter sido removido, ou o endereço esta errado."
         action={
           <Link href="/leads" className={buttonClasses("secondary", "sm")}>
             Ver todos os leads

@@ -1,7 +1,7 @@
 /**
  * Download do CSV com os leads filtrados.
  *
- * Usa os mesmos filtros da tabela (query string), entao o que o usuario ve e
+ * Usa os mesmos filtros da tabela (query string), então o que o usuário vê e
  * exatamente o que ele exporta. Nenhuma chamada externa acontece aqui.
  */
 
@@ -15,7 +15,7 @@ const logger = createLogger("export");
 export async function GET(request: Request) {
   const searchParams = new URL(request.url).searchParams;
   const params: Record<string, string | string[]> = Object.fromEntries(searchParams.entries());
-  // Quando o usuario marcou leads na tabela, exporta so eles.
+  // Quando o usuário marcou leads na tabela, exporta só eles.
   const ids = searchParams.getAll("ids");
   if (ids.length > 0) params.ids = ids;
 

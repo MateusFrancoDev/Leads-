@@ -1,5 +1,5 @@
 /**
- * Analise ficticia para desenvolver a interface sem gastar token.
+ * Análise fictícia para desenvolver a interface sem gastar token.
  * Ativada com AI_PROVIDER="mock".
  */
 
@@ -15,10 +15,10 @@ export class MockAiProvider implements AiProvider {
   async analyzeOpportunity(input: AiLeadInput): Promise<AiAnalysisResponse> {
     const problems: string[] = [];
     if (input.situacaoDoSite !== "HAS_WEBSITE") {
-      problems.push("A empresa nao tem um site proprio funcionando.");
+      problems.push("Nenhum site próprio informado nas fontes consultadas.");
     }
-    if (!input.temEmail) problems.push("Nenhum e-mail publico de contato.");
-    if (!input.temWhatsapp) problems.push("Sem WhatsApp divulgado.");
+    if (!input.temEmail) problems.push("Nenhum e-mail público de contato.");
+    if (input.situacaoDoWhatsapp !== "CONFIRMED") problems.push("WhatsApp não confirmado.");
     for (const issue of input.site?.problemas.slice(0, 2) ?? []) {
       problems.push(issue);
     }
@@ -27,14 +27,14 @@ export class MockAiProvider implements AiProvider {
       model: "mock",
       usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, costUsd: 0 },
       analysis: {
-        summary: `${input.nome} tem reputacao boa e presenca digital fraca.`,
+        summary: `${input.nome} tem presença física e presença digital fraca.`,
         problems: problems.slice(0, 5),
         opportunities: [
-          "Transformar as avaliacoes positivas em prova social em uma pagina propria.",
-          "Captar contatos por WhatsApp direto do Google.",
+          "Criar uma página própria com endereço, horário e contato.",
+          "Captar contatos por WhatsApp a partir do site.",
         ],
-        services: ["Site institucional com captacao", "Otimizacao do perfil no Google"],
-        approach: `Comentar a nota ${input.nota ?? "-"} com ${input.avaliacoes ?? 0} avaliacoes e perguntar como acompanham hoje quem procura a empresa pelo Google.`,
+        services: ["Site institucional com captação", "Landing page com botão de WhatsApp"],
+        approach: `Perguntar como ${input.nome} recebe hoje os contatos de quem procura a empresa na internet.`,
       },
     };
   }

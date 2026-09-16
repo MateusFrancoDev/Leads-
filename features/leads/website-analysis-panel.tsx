@@ -7,14 +7,14 @@ const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeStyle: "short",
 });
 
-/** Cada item traz icone + texto: o estado nunca depende so da cor. */
+/** Cada item traz ícone + texto: o estado nunca depende só da cor. */
 function CheckItem({ label, value }: { label: string; value: boolean | null }) {
   if (value === null) {
     return (
       <li className="flex items-center gap-2 text-ink-subtle">
         <Minus className="size-3.5 shrink-0" aria-hidden />
         <span>{label}</span>
-        <span className="sr-only">nao verificado</span>
+        <span className="sr-only">não verificado</span>
       </li>
     );
   }
@@ -57,9 +57,9 @@ export function WebsiteAnalysisPanel({ analysis }: { analysis: StoredWebsiteAnal
         <CheckItem label="Title" value={analysis.hasTitle} />
         <CheckItem label="Meta description" value={analysis.hasDescription} />
         <CheckItem label="Favicon" value={analysis.hasFavicon} />
-        <CheckItem label="Formulario de contato" value={analysis.hasContactForm} />
-        <CheckItem label="Telefone clicavel" value={analysis.hasPhone} />
-        <CheckItem label="Botao de WhatsApp" value={analysis.hasWhatsapp} />
+        <CheckItem label="Formulário de contato" value={analysis.hasContactForm} />
+        <CheckItem label="Telefone clicável" value={analysis.hasPhone} />
+        <CheckItem label="Botão de WhatsApp" value={analysis.hasWhatsapp} />
         <CheckItem label="Google Analytics" value={analysis.hasAnalytics} />
         <CheckItem label="Meta Pixel" value={analysis.hasMetaPixel} />
       </ul>

@@ -1,6 +1,6 @@
 "use client";
 
-/** Adiciona ou remove o lead das listas de prospeccao. */
+/** Adiciona ou remove o lead das listas de prospecção. */
 
 import { useActionState } from "react";
 import Link from "next/link";
@@ -98,7 +98,7 @@ export function LeadListsPanel({
           </Button>
         </form>
       ) : (
-        <p className="text-xs text-ink-subtle">Este lead ja esta em todas as suas listas.</p>
+        <p className="text-xs text-ink-subtle">Este lead já esta em todas as suas listas.</p>
       )}
 
       {feedback ? (

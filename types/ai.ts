@@ -1,29 +1,29 @@
 /**
- * Contrato da analise de oportunidade por IA.
+ * Contrato da análise de oportunidade por IA.
  *
- * Como nos providers de leads, a aplicacao fala com uma interface - trocar de
- * modelo ou de fornecedor nao altera services, actions nem interface.
+ * Como nos providers de leads, a aplicação fala com uma interface - trocar de
+ * modelo ou de fornecedor não altera services, actions nem interface.
  */
 
 /**
  * Entrada enviada ao modelo. E deliberadamente compacta: nunca o HTML do site,
- * nunca campos repetidos - apenas os sinais que sustentam a analise.
+ * nunca campos repetidos - apenas os sinais que sustentam a análise.
  */
 export interface AiLeadInput {
   nome: string;
   ramo: string | null;
   cidade: string | null;
   estado: string | null;
-  nota: number | null;
-  avaliacoes: number | null;
+  /** Situação do site no banco. NOT_PROVIDED = não informado na fonte, não "sem site". */
   situacaoDoSite: string;
   temTelefone: boolean;
-  temWhatsapp: boolean;
+  /** CONFIRMED, POSSIBLE (só celular) ou UNKNOWN. */
+  situacaoDoWhatsapp: string;
   temEmail: boolean;
   temInstagram: boolean;
   leadScore: number;
   motivosDoScore: string[];
-  /** Presente apenas quando o site ja foi analisado. */
+  /** Presente apenas quando o site já foi analisado. */
   site?: {
     titulo: string | null;
     descricao: string | null;
@@ -44,7 +44,7 @@ export interface AiUsage {
   inputTokens: number;
   outputTokens: number;
   cachedInputTokens: number;
-  /** Estimativa em dolares; null quando o preco do modelo nao e conhecido. */
+  /** Estimativa em dólares; null quando o preço do modelo não e conhecido. */
   costUsd: number | null;
 }
 
@@ -60,13 +60,13 @@ export interface AiProvider {
   analyzeOpportunity(input: AiLeadInput): Promise<AiAnalysisResponse>;
 }
 
-/** Analise ja gravada, como a interface a consome. */
+/** Análise já gravada, como a interface a consome. */
 export interface StoredAiAnalysis extends AiOpportunityAnalysis {
   model: string;
   inputTokens: number;
   outputTokens: number;
   costUsd: number | null;
   createdAt: Date;
-  /** false quando os dados do lead mudaram desde a analise. */
+  /** false quando os dados do lead mudaram desde a análise. */
   isCurrent: boolean;
 }

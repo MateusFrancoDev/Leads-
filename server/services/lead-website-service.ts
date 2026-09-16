@@ -1,8 +1,8 @@
 /**
- * Analise de site sob demanda.
+ * Análise de site sob demanda.
  *
- * Antes de baixar qualquer pagina verifica o banco: se ja existe analise
- * dentro do prazo, nada e refeito. O resultado atualiza a situacao do site
+ * Antes de baixar qualquer página verifica o banco: se já existe análise
+ * dentro do prazo, nada e refeito. O resultado atualiza a situação do site
  * e o Lead Score (site fora do ar vira oportunidade).
  */
 
@@ -46,7 +46,7 @@ export async function analyzeLeadWebsite(leadId: string): Promise<WebsiteAnalysi
 
   const message = result.reachable
     ? `Site analisado: ${result.issues.length} pontos de melhoria`
-    : "Site nao respondeu na analise";
+    : "Site não respondeu na análise";
 
   await saveWebsiteAnalysis(
     leadId,
@@ -83,6 +83,6 @@ export async function analyzeLeadWebsite(leadId: string): Promise<WebsiteAnalysi
     success: result.reachable,
   });
 
-  logger.info("analise concluida", { leadId, problemas: result.issues.length });
+  logger.info("análise concluida", { leadId, problemas: result.issues.length });
   return { status: "analyzed", issues: result.issues, reachable: result.reachable, score: score.score };
 }

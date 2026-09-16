@@ -1,13 +1,17 @@
 /**
- * Configuracao central do Lead Score (0 a 100).
- * Todo peso e limiar vive aqui - nenhum numero magico espalhado pelo codigo.
- * Ajustar estes valores muda o ranking inteiro sem tocar na logica.
+ * Configuração central do Lead Score (0 a 100).
+ * Todo peso e limiar vive aqui - nenhum número mágico espalhado pelo código.
+ * Ajustar estes valores muda o ranking inteiro sem tocar na lógica.
+ *
+ * O perfil priorizado é o de quem pode precisar de site, landing page ou
+ * automação: empresa real, com endereço e contato, presença em rede social e
+ * sem site conhecido.
  */
 
 export const LEAD_SCORE_CONFIG = {
   maxScore: 100,
 
-  /** Faixas de oportunidade: score >= limiar define o nivel. */
+  /** Faixas de oportunidade: score >= limiar define o nível. */
   levels: {
     high: 70,
     medium: 40,
@@ -15,28 +19,28 @@ export const LEAD_SCORE_CONFIG = {
 
   /** Pontos por sinal encontrado. */
   weights: {
-    /** Nao possui site proprio - a maior oportunidade do produto. */
-    noWebsite: 30,
-    /** Site existe mas esta fora do ar ou quebrado. */
-    brokenWebsite: 20,
-    /** So tem rede social no lugar do site. */
-    socialOnly: 25,
-    /** Site sem HTTPS (avaliado na Fase 2). */
+    /** Ausência de site comprovada. Nenhuma fonte desta versão comprova, mas o peso fica pronto. */
+    websiteConfirmedMissing: 30,
+    /**
+     * A fonte foi consultada e não informou site. Vale menos que a ausência
+     * comprovada: a empresa pode ter um site que só não está no mapa.
+     */
+    websiteNotProvided: 20,
+    /** Site cadastrado que não respondeu à análise. */
+    websiteUnreachable: 20,
+    /** Endereço de site inválido na fonte. */
+    websiteInvalid: 10,
+    /** Site sem HTTPS (visto na análise de site). */
     websiteWithoutHttps: 10,
-    hasPhone: 15,
-    hasWhatsapp: 10,
-    hasInstagram: 8,
-    hasEmail: 10,
-    goodRating: 10,
-    manyReviews: 7,
-    veryManyReviews: 5,
-  },
-
-  /** Limiares usados pelos pesos acima. */
-  thresholds: {
-    goodRating: 4,
-    manyReviews: 20,
-    veryManyReviews: 100,
+    phone: 15,
+    confirmedWhatsapp: 15,
+    possibleWhatsapp: 5,
+    instagram: 10,
+    email: 10,
+    /** Rua, número e cidade: presença física verificável. */
+    fullAddress: 5,
+    /** Tem Instagram/Facebook mas nenhum site conhecido - o perfil mais interessante. */
+    socialPresenceWithoutWebsite: 15,
   },
 } as const;
 

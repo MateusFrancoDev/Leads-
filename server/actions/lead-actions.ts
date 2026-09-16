@@ -38,7 +38,7 @@ export async function updateLeadStatusAction(
     leadId: formData.get("leadId"),
     status: formData.get("status"),
   });
-  if (!parsed.success) return { status: "error", message: "Status invalido." };
+  if (!parsed.success) return { status: "error", message: "Status inválido." };
 
   try {
     await updateLeadStatus(parsed.data.leadId, parsed.data.status);
@@ -59,7 +59,7 @@ export async function toggleFavoriteAction(
   formData: FormData,
 ): Promise<LeadActionState> {
   const parsed = favoriteSchema.safeParse({ leadId: formData.get("leadId") });
-  if (!parsed.success) return { status: "error", message: "Lead invalido." };
+  if (!parsed.success) return { status: "error", message: "Lead inválido." };
 
   try {
     const isFavorite = await toggleLeadFavorite(parsed.data.leadId);
@@ -74,41 +74,41 @@ export async function toggleFavoriteAction(
 
 const leadIdSchema = z.object({ leadId: z.string().min(1) });
 
-/** Enriquecimento sob demanda: so roda quando o usuario clica. */
+/** Enriquecimento sob demanda: só roda quando o usuário clica. */
 export async function enrichLeadAction(
   _previous: LeadActionState,
   formData: FormData,
 ): Promise<LeadActionState> {
   const parsed = leadIdSchema.safeParse({ leadId: formData.get("leadId") });
-  if (!parsed.success) return { status: "error", message: "Lead invalido." };
+  if (!parsed.success) return { status: "error", message: "Lead inválido." };
 
   try {
     const outcome = await enrichLead(parsed.data.leadId);
     revalidatePath(`/leads/${parsed.data.leadId}`);
 
     if (outcome.status === "enriched") {
-      return { status: "success", message: `Dados encontrados: ${outcome.fields.join(", ")}.` };
+      return { status: "success", message: `Encontrado no site oficial: ${outcome.fields.join(", ")}.` };
     }
-    return {
-      status: "success",
-      message:
-        outcome.reason === "recent"
-          ? "Este lead ja foi enriquecido recentemente - nada foi consultado."
-          : "Nenhum dado novo foi encontrado para este lead.",
+    const messages: Record<typeof outcome.reason, string> = {
+      recent: "O site deste lead foi lido recentemente - nada foi baixado de novo.",
+      "nothing-new": "O site oficial não mostra nenhum contato novo.",
+      "no-website": "Este lead não tem site informado para ler.",
+      unreachable: "O site oficial não respondeu. O lead foi mantido sem alterações.",
     };
+    return { status: outcome.reason === "unreachable" ? "error" : "success", message: messages[outcome.reason] };
   } catch (error) {
     logger.error("falha ao enriquecer");
     return { status: "error", message: userMessage(error) };
   }
 }
 
-/** Analise do site sob demanda. */
+/** Análise do site sob demanda. */
 export async function analyzeWebsiteAction(
   _previous: LeadActionState,
   formData: FormData,
 ): Promise<LeadActionState> {
   const parsed = leadIdSchema.safeParse({ leadId: formData.get("leadId") });
-  if (!parsed.success) return { status: "error", message: "Lead invalido." };
+  if (!parsed.success) return { status: "error", message: "Lead inválido." };
 
   try {
     const outcome = await analyzeLeadWebsite(parsed.data.leadId);
@@ -119,15 +119,15 @@ export async function analyzeWebsiteAction(
         status: "success",
         message: outcome.reachable
           ? `Site analisado: ${outcome.issues.length} pontos de melhoria.`
-          : "O site nao respondeu - lead marcado como site fora do ar.",
+          : "O site não respondeu - lead marcado como site fora do ar.",
       };
     }
     return {
       status: "success",
       message:
         outcome.reason === "no-website"
-          ? "Este lead nao possui site proprio para analisar."
-          : "O site ja foi analisado recentemente - nada foi baixado de novo.",
+          ? "Este lead não tem site informado para analisar."
+          : "O site já foi analisado recentemente - nada foi baixado de novo.",
     };
   } catch (error) {
     logger.error("falha ao analisar site");
@@ -135,13 +135,13 @@ export async function analyzeWebsiteAction(
   }
 }
 
-/** Analise de oportunidade por IA. So roda quando o usuario pede. */
+/** Análise de oportunidade por IA. Só roda quando o usuário pede. */
 export async function analyzeOpportunityAction(
   _previous: LeadActionState,
   formData: FormData,
 ): Promise<LeadActionState> {
   const parsed = leadIdSchema.safeParse({ leadId: formData.get("leadId") });
-  if (!parsed.success) return { status: "error", message: "Lead invalido." };
+  if (!parsed.success) return { status: "error", message: "Lead inválido." };
 
   try {
     const outcome = await analyzeLeadOpportunity(parsed.data.leadId);
@@ -151,8 +151,8 @@ export async function analyzeOpportunityAction(
       status: "success",
       message:
         outcome.status === "analyzed"
-          ? "Analise gerada."
-          : "Os dados nao mudaram desde a ultima analise - nenhum token foi gasto.",
+          ? "Análise gerada."
+          : "Os dados não mudaram desde a última análise - nenhum token foi gasto.",
     };
   } catch (error) {
     logger.error("falha ao analisar oportunidade");
@@ -165,7 +165,7 @@ const notesSchema = z.object({
   notes: z.string().trim().max(5_000),
 });
 
-/** Anotacoes do lead (CRM). */
+/** Anotações do lead (CRM). */
 export async function saveLeadNotesAction(
   _previous: LeadActionState,
   formData: FormData,
@@ -174,14 +174,14 @@ export async function saveLeadNotesAction(
     leadId: formData.get("leadId"),
     notes: formData.get("notes") ?? "",
   });
-  if (!parsed.success) return { status: "error", message: "Anotacao invalida." };
+  if (!parsed.success) return { status: "error", message: "Anotação inválida." };
 
   try {
     await updateLeadNotes(parsed.data.leadId, parsed.data.notes || null);
     revalidatePath(`/leads/${parsed.data.leadId}`);
-    return { status: "success", message: "Anotacoes salvas." };
+    return { status: "success", message: "Anotações salvas." };
   } catch (error) {
-    logger.error("falha ao salvar anotacoes");
+    logger.error("falha ao salvar anotações");
     return { status: "error", message: userMessage(error) };
   }
 }

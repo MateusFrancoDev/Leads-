@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Navegacao principal. Client Component apenas pelo que exige o navegador:
- * rota ativa (usePathname) e o menu recolhivel no mobile.
+ * Navegação principal. Client Component apenas pelo que exige o navegador:
+ * rota ativa (usePathname) e o menu recolhível no mobile.
  */
 
 import { useState } from "react";
@@ -30,8 +30,8 @@ const NAV_ITEMS = [
   { href: "/mapa", label: "Mapa", icon: Map },
   { href: "/listas", label: "Listas", icon: ListChecks },
   { href: "/favoritos", label: "Favoritos", icon: Star },
-  { href: "/historico", label: "Historico", icon: History },
-  { href: "/configuracoes", label: "Configuracoes", icon: Settings },
+  { href: "/historico", label: "Histórico", icon: History },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
@@ -43,7 +43,7 @@ export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const nav = (
-    <nav className="flex flex-col gap-0.5" aria-label="Navegacao principal">
+    <nav className="flex flex-col gap-0.5" aria-label="Navegação principal">
       {NAV_ITEMS.map((item) => {
         const active = isActive(pathname, item.href);
         return (
@@ -69,7 +69,7 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Barra superior: so aparece no mobile */}
+      {/* Barra superior: só aparece no mobile */}
       <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 md:hidden">
         <span className="text-sm font-semibold tracking-tight">{APP_CONFIG.name}</span>
         <button

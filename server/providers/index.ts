@@ -1,35 +1,59 @@
 /**
- * Registro de providers. A aplicacao pede "o provider ativo" e recebe uma
- * implementacao de LeadProvider - nenhuma outra camada conhece Google Places.
+ * Registro das fontes de empresas. A busca recebe um único LeadProvider que
+ * consulta todas as fontes habilitadas no .env e junta os resultados.
+ *
+ * Só fontes reais entram aqui. Para adicionar outra fonte gratuita: crie a
+ * implementação em lib/leads/providers, inclua o nome em LEAD_SOURCES e
+ * acrescente-a na lista abaixo.
  */
 
 import { AppError } from "@/lib/errors";
-import { serverConfig, type LeadProviderName } from "@/server/config";
-import { GooglePlacesProvider } from "@/server/providers/google-places-provider";
-import { MockProvider } from "@/server/providers/mock-provider";
-import { OpenStreetMapProvider } from "@/server/providers/openstreetmap-provider";
-import type { LeadProvider } from "@/types/provider";
+import { NominatimGeocoder } from "@/lib/leads/geocoding/nominatim";
+import { CompositeLeadProvider } from "@/lib/leads/providers/composite";
+import { OpenStreetMapProvider } from "@/lib/leads/providers/openstreetmap";
+import { OverpassClient } from "@/lib/leads/providers/overpass-client";
+import { ReceitaFederalProvider } from "@/lib/leads/providers/receita-federal";
+import type { LeadProvider } from "@/lib/leads/types";
+import { OSM_USER_AGENT, serverConfig } from "@/server/config";
+import { cnpjStore } from "@/server/repositories/cnpj-repository";
+import { locationCacheStore } from "@/server/repositories/location-cache-repository";
 
-const factories: Record<LeadProviderName, () => LeadProvider> = {
-  google_places: () => new GooglePlacesProvider(),
-  openstreetmap: () => new OpenStreetMapProvider(),
-  mock: () => new MockProvider(),
-};
-
-const instances = new Map<LeadProviderName, LeadProvider>();
-
-export function getProvider(name: LeadProviderName = serverConfig.provider.name): LeadProvider {
-  const cached = instances.get(name);
-  if (cached) return cached;
-
-  const provider = factories[name]();
-  instances.set(name, provider);
-  return provider;
+function createOpenStreetMapProvider(): OpenStreetMapProvider {
+  const osm = serverConfig.openStreetMap;
+  return new OpenStreetMapProvider({
+    enabled: osm.enabled,
+    overpassTimeoutMs: osm.overpassTimeoutMs,
+    geocoder: new NominatimGeocoder({
+      baseUrl: osm.nominatimUrl,
+      userAgent: OSM_USER_AGENT,
+      minIntervalMs: osm.nominatimMinIntervalMs,
+      timeoutMs: serverConfig.external.timeoutMs,
+      store: locationCacheStore,
+    }),
+    overpass: new OverpassClient({
+      endpoints: osm.overpassEndpoints,
+      timeoutMs: osm.overpassTimeoutMs,
+      maxAttempts: osm.overpassMaxAttempts,
+      userAgent: OSM_USER_AGENT,
+    }),
+  });
 }
 
-/** Provider ativo, ja validado. Lanca erro tipado quando falta configuracao. */
+// Uma instância por processo: o controle de ritmo e o cache em memória só
+// funcionam se todas as buscas passarem pelo mesmo objeto.
+let instance: LeadProvider | null = null;
+
+export function getLeadProvider(): LeadProvider {
+  instance ??= new CompositeLeadProvider([
+    createOpenStreetMapProvider(),
+    new ReceitaFederalProvider({ enabled: serverConfig.cnpj.enabled, store: cnpjStore }),
+  ]);
+  return instance;
+}
+
+/** Fontes ativas, já validadas. Lança erro tipado quando todas estão desligadas no .env. */
 export function getActiveProvider(): LeadProvider {
-  const provider = getProvider();
-  if (!provider.isConfigured()) throw new AppError("PROVIDER_NOT_CONFIGURED");
+  const provider = getLeadProvider();
+  if (!provider.isEnabled()) throw new AppError("PROVIDER_NOT_CONFIGURED");
   return provider;
 }

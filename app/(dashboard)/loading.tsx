@@ -1,4 +1,4 @@
-/** Esqueleto exibido enquanto a pagina busca dados no banco. */
+/** Esqueleto exibido enquanto a página busca dados no banco. */
 export default function DashboardLoading() {
   return (
     <div className="flex flex-col gap-6" aria-busy="true" aria-live="polite">

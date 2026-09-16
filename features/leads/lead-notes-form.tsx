@@ -1,6 +1,6 @@
 "use client";
 
-/** Anotacoes livres sobre o lead (CRM basico). */
+/** Anotações livres sobre o lead (CRM básico). */
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ export function LeadNotesForm({ leadId, notes }: { leadId: string; notes: string
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="leadId" value={leadId} />
       <label htmlFor="lead-notes" className="sr-only">
-        Anotacoes sobre o lead
+        Anotações sobre o lead
       </label>
       <Textarea
         id="lead-notes"
@@ -22,11 +22,11 @@ export function LeadNotesForm({ leadId, notes }: { leadId: string; notes: string
         rows={4}
         maxLength={5000}
         defaultValue={notes ?? ""}
-        placeholder="Quem atendeu, o que foi combinado, proximo passo..."
+        placeholder="Quem atendeu, o que foi combinado, próximo passo..."
       />
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" disabled={pending}>
-          {pending ? "Salvando..." : "Salvar anotacoes"}
+          {pending ? "Salvando..." : "Salvar anotações"}
         </Button>
         {state.message ? (
           <p

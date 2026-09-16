@@ -10,7 +10,7 @@ const CONTROL_CLASSES =
   "h-9 w-full rounded-md border border-line bg-surface px-2.5 text-sm text-ink " +
   "placeholder:text-ink-subtle focus:border-accent focus:outline-none";
 
-/** Rotulo + controle + mensagem de erro, com ligacao acessivel entre eles. */
+/** Rótulo + controle + mensagem de erro, com ligação acessível entre eles. */
 export function Field({
   label,
   htmlFor,
@@ -67,14 +67,14 @@ export function Select({
   );
 }
 
-/** Opcoes dos filtros "possui / nao possui". */
+/** Opções dos filtros "possui / não possui". */
 export const TRI_STATE_OPTIONS = [
   { value: "any", label: "Indiferente" },
   { value: "yes", label: "Possui" },
-  { value: "no", label: "Nao possui" },
+  { value: "no", label: "Não possui" },
 ] as const;
 
-/** Filtro de presenca (site, telefone, WhatsApp...) usado nas duas telas. */
+/** Filtro de presença (telefone, Instagram, e-mail...) usado nas duas telas. */
 export function TriStateField({
   name,
   label,
@@ -84,11 +84,28 @@ export function TriStateField({
   label: string;
   defaultValue: string;
 }) {
+  return (
+    <OptionsField name={name} label={label} defaultValue={defaultValue} options={TRI_STATE_OPTIONS} />
+  );
+}
+
+/** Select rotulado a partir de uma lista de opções (filtros de site, WhatsApp...). */
+export function OptionsField({
+  name,
+  label,
+  defaultValue,
+  options,
+}: {
+  name: string;
+  label: string;
+  defaultValue: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+}) {
   const id = `filter-${name}`;
   return (
     <Field label={label} htmlFor={id}>
       <Select id={id} name={name} defaultValue={defaultValue}>
-        {TRI_STATE_OPTIONS.map((option) => (
+        {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>

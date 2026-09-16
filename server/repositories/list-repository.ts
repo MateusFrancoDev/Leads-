@@ -1,6 +1,6 @@
 /**
- * Acesso a dados das listas de prospeccao.
- * Uma lista e so um agrupamento nomeado de leads - os leads continuam unicos.
+ * Acesso a dados das listas de prospecção.
+ * Uma lista e só um agrupamento nomeado de leads - os leads continuam únicos.
  */
 
 import { AppError } from "@/lib/errors";
@@ -63,7 +63,7 @@ export async function createProspectingList(input: {
       where: { slug },
       select: { id: true },
     });
-    if (existing) throw new AppError("INVALID_INPUT", "Ja existe uma lista com esse nome.");
+    if (existing) throw new AppError("INVALID_INPUT", "Já existe uma lista com esse nome.");
 
     return await prisma.prospectingList.create({
       data: { name: input.name, slug, description: input.description ?? null },
@@ -83,7 +83,7 @@ export async function deleteProspectingList(id: string): Promise<void> {
   }
 }
 
-/** Adiciona o lead a lista. Repetir a acao nao duplica nem falha. */
+/** Adiciona o lead a lista. Repetir a ação não duplica nem falha. */
 export async function addLeadToList(listId: string, leadId: string): Promise<void> {
   try {
     await prisma.$transaction([
@@ -107,7 +107,7 @@ export async function removeLeadFromList(listId: string, leadId: string): Promis
   }
 }
 
-/** Listas que ja contem este lead - usado para marcar as opcoes na interface. */
+/** Listas que já contêm este lead - usado para marcar as opções na interface. */
 export async function findListIdsForLead(leadId: string): Promise<string[]> {
   try {
     const rows = await prisma.prospectingListLead.findMany({

@@ -1,7 +1,7 @@
 /**
- * Instancia unica do Prisma Client (driver adapter pg, exigido pelo Prisma 7).
- * Este e o unico ponto da aplicacao que cria conexao com o banco -
- * componentes e services sempre passam pelos repositorios.
+ * Instância única do Prisma Client (driver adapter pg, exigido pelo Prisma 7).
+ * Este e o único ponto da aplicação que cria conexão com o banco -
+ * componentes e services sempre passam pelos repositórios.
  */
 
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -20,8 +20,8 @@ function createPrismaClient(): PrismaClient {
   });
 }
 
-// Em desenvolvimento o hot reload recria modulos; sem o cache global cada
-// recarregamento abriria um novo pool de conexoes.
+// Em desenvolvimento o hot reload recria módulos; sem o cache global cada
+// recarregamento abriria um novo pool de conexões.
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 export const prisma: PrismaClient = globalForPrisma.prisma ?? createPrismaClient();

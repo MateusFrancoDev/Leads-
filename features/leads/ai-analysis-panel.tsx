@@ -35,13 +35,13 @@ export function AiAnalysisPanel({ analysis }: { analysis: StoredAiAnalysis }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm text-ink">{analysis.summary}</p>
         {analysis.isCurrent ? null : (
-          <Badge tone="warning">Dados mudaram depois desta analise</Badge>
+          <Badge tone="warning">Dados mudaram depois desta análise</Badge>
         )}
       </div>
 
       <List title="Problemas encontrados" items={analysis.problems} />
       <List title="Oportunidades" items={analysis.opportunities} />
-      <List title="Servicos que podemos oferecer" items={analysis.services} />
+      <List title="Serviços que podemos oferecer" items={analysis.services} />
 
       <div className="border-t border-line pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

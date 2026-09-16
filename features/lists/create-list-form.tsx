@@ -1,6 +1,6 @@
 "use client";
 
-/** Criacao de lista de prospeccao (ex.: "Clinicas sem site - Osasco"). */
+/** Criação de lista de prospecção (ex.: "Clinicas sem site - Osasco"). */
 
 import { useActionState } from "react";
 import { Plus } from "lucide-react";
@@ -24,7 +24,7 @@ export function CreateListForm() {
             placeholder="Clinicas sem site - Osasco"
           />
         </Field>
-        <Field label="Descricao" htmlFor="list-description" error={errors.description}>
+        <Field label="Descrição" htmlFor="list-description" error={errors.description}>
           <Input
             id="list-description"
             name="description"

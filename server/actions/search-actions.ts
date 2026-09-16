@@ -5,6 +5,7 @@
  * qualquer chamada externa - nada vindo do navegador e usado direto.
  */
 
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { userMessage } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
@@ -13,8 +14,9 @@ import {
   formDataToObject,
   parseLeadFilters,
   searchFormSchema,
+  toSearchFilters,
 } from "@/lib/validation";
-import { executeSearch } from "@/server/services/lead-search-service";
+import { searchLeads } from "@/server/services/lead-search-service";
 
 const logger = createLogger("search-action");
 
@@ -42,17 +44,21 @@ export async function runSearchAction(
     return { status: "error", message: "Revise os campos destacados.", fieldErrors };
   }
 
+  const filters = parseLeadFilters(raw);
   let searchId: string;
   try {
-    const execution = await executeSearch(parsed.data);
-    searchId = execution.searchId;
+    const { nearbyCities, ...search } = parsed.data;
+    const outcome = await searchLeads(
+      { ...search, extraCities: nearbyCities, filters: toSearchFilters(filters) },
+      { scheduleBackground: (task) => after(task) },
+    );
+    searchId = outcome.searchId;
   } catch (error) {
-    logger.error("falha na busca", { termo: parsed.data.term });
+    logger.error("falha na busca", { segmento: parsed.data.query });
     return { status: "error", message: userMessage(error) };
   }
 
-  // Os filtros de exibicao vao na URL: a tabela e renderizada no servidor a
-  // partir do banco, sem repetir a consulta ao provider.
-  const filters = parseLeadFilters(raw);
-  redirect(`/buscar${buildLeadFiltersQuery(filters, { searchId, limit: undefined })}`);
+  // Os filtros de exibição vão na URL: a tabela e renderizada no servidor a
+  // partir do banco, sem repetir a consulta à fonte.
+  redirect(`/buscar${buildLeadFiltersQuery(filters, { searchId, max: parsed.data.limit, limit: undefined })}`);
 }

@@ -33,8 +33,8 @@ export default async function ListsPage() {
   return (
     <>
       <PageHeader
-        title="Listas de prospeccao"
-        description="Agrupe leads por campanha, regiao ou nicho para trabalhar em lote."
+        title="Listas de prospecção"
+        description="Agrupe leads por campanha, região ou nicho para trabalhar em lote."
       />
 
       <Panel className="p-4 md:p-5">
@@ -75,7 +75,7 @@ export default async function ListsPage() {
           ) : (
             <EmptyState
               title="Nenhuma lista ainda"
-              description="Crie uma lista acima e depois adicione leads a partir da pagina de cada empresa."
+              description="Crie uma lista acima e depois adicione leads a partir da página de cada empresa."
             />
           )}
         </Panel>

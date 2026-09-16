@@ -16,7 +16,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/leads">) {
     <>
       <PageHeader
         title="Todos os leads"
-        description="Base completa ja coletada. Filtrar aqui nao consome nenhuma requisicao de API."
+        description="Base completa já coletada. Filtrar aqui não consome nenhuma requisição de API."
       />
 
       <Panel className="p-4 md:p-5">

@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader, Panel } from "@/components/ui/feedback";
 import { describeConfig } from "@/server/config";
+import { listImportedCnpjCities } from "@/server/repositories/cnpj-repository";
+import { leadSourceLabel } from "@/types/lead";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Configuracoes" };
+export const metadata: Metadata = { title: "Configurações" };
 
 /**
- * Configuracao em modo leitura. Tudo aqui vem do .env - a pagina existe para
+ * Configuração em modo leitura. Tudo aqui vem do .env - a página existe para
  * conferir o que esta ligado e quanto custa, nunca para expor chave nenhuma.
  */
 
@@ -58,19 +60,30 @@ function StatusBadge({ ok, okLabel, offLabel }: { ok: boolean; okLabel: string; 
   return <Badge tone={ok ? "positive" : "warning"}>{ok ? okLabel : offLabel}</Badge>;
 }
 
-export default function SettingsPage() {
+const dateFormatter = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
+
+async function loadImportedCities() {
+  try {
+    return await listImportedCnpjCities();
+  } catch {
+    return null;
+  }
+}
+
+export default async function SettingsPage() {
   const config = describeConfig();
+  const importedCities = await loadImportedCities();
 
   return (
     <>
       <PageHeader
-        title="Configuracoes"
+        title="Configurações"
         description="Tudo e definido no arquivo .env na raiz do projeto. Reinicie o servidor depois de alterar."
       />
 
       <Section title="Banco de dados" description="PostgreSQL via Prisma.">
         <Row
-          label="Conexao"
+          label="Conexão"
           value={
             <StatusBadge
               ok={config.database.configured}
@@ -78,48 +91,140 @@ export default function SettingsPage() {
               offLabel="DATABASE_URL vazia"
             />
           }
-          hint="DATABASE_URL (aplicacao) e DIRECT_URL (migrations)"
+          hint="DATABASE_URL (aplicação) e DIRECT_URL (migrations)"
         />
         <Row
-          label="Conexoes simultaneas"
+          label="Conexões simultâneas"
           value={config.database.poolMax}
-          hint="DB_POOL_MAX - poolers derrubam conexoes acima do limite"
+          hint="DB_POOL_MAX - poolers derrubam conexões acima do limite"
         />
       </Section>
 
       <Section
-        title="Fonte de leads"
-        description="De onde vem as empresas. Trocar o provider nao muda mais nada na aplicacao."
+        title="Fontes de leads"
+        description="Empresas reais do OpenStreetMap e da Receita Federal. Gratuito, sem chave de API e sem cartão."
       >
         <Row
-          label="Provider ativo"
-          value={config.leads.provider}
-          hint="LEAD_PROVIDER - google_places (pago), openstreetmap (gratuito) ou mock"
+          label="Fontes ativas"
+          value={config.leads.sources.map((source) => leadSourceLabel(source)).join(", ") || "Nenhuma"}
+          hint="OPENSTREETMAP_ENABLED e CNPJ_ENABLED"
         />
         <Row
-          label="Situacao"
+          label="Situação"
           value={
             <StatusBadge
               ok={config.leads.configured}
               okLabel="Pronto para buscar"
-              offLabel="Falta GOOGLE_PLACES_API_KEY"
+              offLabel="Todas as fontes desligadas"
             />
           }
         />
         <Row
-          label="Maximo de leads por pesquisa"
+          label="Overpass API"
+          value={
+            <span className="flex flex-col items-end gap-0.5 break-all text-xs">
+              {config.leads.overpassEndpoints.map((url, index) => (
+                <span key={url}>
+                  {index === 0 ? "principal: " : "fallback: "}
+                  {url}
+                </span>
+              ))}
+            </span>
+          }
+          hint="OVERPASS_API_URL e OVERPASS_FALLBACK_URL"
+        />
+        <Row
+          label="Timeout e tentativas do Overpass"
+          value={`${config.leads.overpassTimeoutMs} ms · ${config.leads.overpassMaxAttempts}x`}
+          hint="OVERPASS_TIMEOUT_MS e OVERPASS_MAX_ATTEMPTS"
+        />
+        <Row
+          label="Nominatim"
+          value={<span className="break-all text-xs">{config.leads.nominatimUrl}</span>}
+          hint={`NOMINATIM_API_URL - no máximo 1 consulta a cada ${config.leads.nominatimMinIntervalMs} ms`}
+        />
+        <Row
+          label="Máximo pedido à fonte por pesquisa"
           value={config.leads.maxResultsPerSearch}
           hint="MAX_RESULTS_PER_SEARCH"
         />
       </Section>
 
       <Section
-        title="Inteligencia artificial"
-        description="Analise de oportunidade sob demanda. Desligada nao aparece na tela do lead."
+        title="Receita Federal (Dados Abertos do CNPJ)"
+        description="Empresas ativas das cidades importadas, com CNAE, endereço e contato declarado. Atualize uma vez por mês."
+      >
+        <Row
+          label="Situação"
+          value={<StatusBadge ok={config.leads.cnpjEnabled} okLabel="Ligada" offLabel="Desligada" />}
+          hint="CNPJ_ENABLED"
+        />
+        <Row
+          label="Arquivos baixados em"
+          value={<span className="break-all font-mono text-xs">{config.leads.cnpjDataDir}</span>}
+          hint="CNPJ_DATA_DIR - cerca de 7 GB por mês"
+        />
+        <Row
+          label="Cidades importadas"
+          value={
+            importedCities === null ? (
+              <Badge tone="warning">Não foi possível ler</Badge>
+            ) : importedCities.length === 0 ? (
+              <Badge tone="warning">Nenhuma</Badge>
+            ) : (
+              <span className="flex flex-col items-end gap-0.5 text-xs">
+                {importedCities.map((city) => (
+                  <span key={`${city.state}|${city.cityName}`}>
+                    {city.cityName}/{city.state} · {city.rows.toLocaleString("pt-BR")} empresas · base{" "}
+                    {city.datasetMonth} · {dateFormatter.format(city.importedAt)}
+                  </span>
+                ))}
+              </span>
+            )
+          }
+          hint='npm run cnpj:import -- --uf SP --cidades "Osasco, Barueri"'
+        />
+      </Section>
+
+      <Section
+        title="Leitura de sites oficiais"
+        description="Completa e-mail, telefone, WhatsApp e redes a partir do site da própria empresa."
+      >
+        <Row
+          label="Situação"
+          value={<StatusBadge ok={config.crawler.enabled} okLabel="Ligada" offLabel="Desligada" />}
+          hint="WEBSITE_CRAWLER_ENABLED"
+        />
+        <Row label="Páginas por site" value={config.crawler.maxPages} hint="WEBSITE_CRAWLER_MAX_PAGES" />
+        <Row
+          label="Sites lidos ao mesmo tempo"
+          value={config.crawler.concurrency}
+          hint="WEBSITE_CRAWLER_CONCURRENCY"
+        />
+        <Row
+          label="Sites lidos por pesquisa"
+          value={config.crawler.maxSitesPerSearch}
+          hint="WEBSITE_CRAWLER_MAX_SITES_PER_SEARCH"
+        />
+        <Row
+          label="Timeout por página"
+          value={`${config.crawler.timeoutMs} ms`}
+          hint="WEBSITE_CRAWLER_TIMEOUT_MS"
+        />
+        <Row
+          label="Tamanho máximo por página"
+          value={`${Math.round(config.crawler.maxResponseBytes / 1000)} KB`}
+          hint="WEBSITE_CRAWLER_MAX_RESPONSE_BYTES"
+        />
+      </Section>
+
+      <Section
+        title="Inteligência artificial"
+        description="Análise de oportunidade sob demanda. Desligada não aparece na tela do lead."
       >
         <Row label="Provider" value={config.ai.provider} hint="AI_PROVIDER" />
         <Row
-          label="Situacao"
+          label="Situação"
           value={
             config.ai.provider === "none" ? (
               <Badge>Desligada</Badge>
@@ -134,7 +239,7 @@ export default function SettingsPage() {
         />
         <Row label="Modelo" value={config.ai.model} hint="AI_MODEL" />
         <Row
-          label="Nivel de esforco"
+          label="Nível de esforço"
           value={config.ai.effort}
           hint="AI_EFFORT - menor gasta menos tokens"
         />
@@ -142,35 +247,35 @@ export default function SettingsPage() {
 
       <Section
         title="Limites e cache"
-        description="Os numeros que seguram o custo. Todos vem do .env."
+        description="Os números que evitam abuso dos serviços públicos. Todos vem do .env."
       >
         <Row
           label="Validade do cache de pesquisas"
           value={`${config.limits.searchCacheHours} h`}
-          hint="SEARCH_CACHE_TTL_HOURS - repetir a busca dentro do prazo nao chama a API"
+          hint="LEAD_CACHE_TTL_HOURS - pesquisa equivalente dentro do prazo é respondida pelo banco"
         />
         <Row
-          label="Reenriquecimento"
+          label="Releitura do site oficial"
           value={`${config.limits.enrichmentTtlHours} h`}
-          hint="ENRICHMENT_TTL_HOURS"
+          hint="ENRICHMENT_TTL_HOURS - site lido há menos tempo não é baixado de novo"
         />
         <Row
-          label="Reanalise de site"
+          label="Reanálise de site"
           value={`${config.limits.websiteAnalysisTtlHours} h`}
           hint="WEBSITE_ANALYSIS_TTL_HOURS"
         />
         <Row
-          label="Requisicoes externas simultaneas"
+          label="Gravações simultâneas no banco"
           value={config.limits.concurrency}
           hint="EXTERNAL_CONCURRENCY"
         />
         <Row
-          label="Timeout de chamadas externas"
+          label="Timeout do Nominatim"
           value={`${config.limits.timeoutMs} ms`}
           hint="EXTERNAL_TIMEOUT_MS"
         />
         <Row
-          label="Maximo de linhas por exportacao"
+          label="Máximo de linhas por exportação"
           value={config.limits.maxExportRows}
           hint="MAX_EXPORT_ROWS"
         />

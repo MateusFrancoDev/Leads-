@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deleteListAction, initialListActionState } from "@/server/actions/list-actions";
 
-/** Exclui a lista. Os leads continuam na base - so o agrupamento some. */
+/** Exclui a lista. Os leads continuam na base - só o agrupamento some. */
 export function DeleteListButton({ listId, listName }: { listId: string; listName: string }) {
   const [state, formAction, pending] = useActionState(deleteListAction, initialListActionState);
 
@@ -13,7 +13,7 @@ export function DeleteListButton({ listId, listName }: { listId: string; listNam
     <form
       action={formAction}
       onSubmit={(event) => {
-        if (!window.confirm(`Excluir a lista "${listName}"? Os leads nao serao apagados.`)) {
+        if (!window.confirm(`Excluir a lista "${listName}"? Os leads não serão apagados.`)) {
           event.preventDefault();
         }
       }}

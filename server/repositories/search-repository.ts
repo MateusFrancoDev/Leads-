@@ -1,39 +1,27 @@
 /**
  * Acesso a dados de Search / SearchResult / ApiUsage.
  *
- * A tabela Search e o cache: a mesma pesquisa repetida dentro do TTL e
- * respondida pelo banco, sem gastar requisicao do provider.
+ * A tabela Search e o cache: uma pesquisa equivalente dentro do TTL é
+ * respondida pelo banco, sem nenhuma consulta ao OpenStreetMap.
  */
 
 import type { Prisma } from "@/generated/prisma/client";
 import { AppError } from "@/lib/errors";
-import { slugify } from "@/lib/normalize";
+import type { SaveSearchRecord, SearchCacheEntry, SourceCounts } from "@/lib/leads/search-pipeline";
+import { LEAD_SOURCES } from "@/lib/leads/types";
 import { prisma } from "@/server/db/prisma";
-import type { NormalizedSearch, SearchHistoryItem } from "@/types/search";
+import type { SearchHistoryItem } from "@/types/search";
 
-/** Chave estavel da pesquisa (ex.: "google_places|dentista|osasco|sp|5000"). */
-export function buildSearchCacheKey(provider: string, search: NormalizedSearch): string {
-  return [
-    provider,
-    slugify(search.term),
-    slugify(search.keyword ?? ""),
-    slugify(search.neighborhood ?? ""),
-    slugify(search.city ?? ""),
-    slugify(search.state ?? ""),
-    search.radiusMeters ?? "",
-  ].join("|");
-}
-
-/** Campos usados pelo historico e pelo resumo da pesquisa. */
+/** Campos usados pelo histórico e pelo resumo da pesquisa. */
 const SEARCH_SELECT = {
   id: true,
   term: true,
-  keyword: true,
   city: true,
   state: true,
-  neighborhood: true,
-  radiusMeters: true,
+  extraCities: true,
   provider: true,
+  sourceCounts: true,
+  warnings: true,
   resultsCount: true,
   requestCount: true,
   runCount: true,
@@ -42,25 +30,31 @@ const SEARCH_SELECT = {
   expiresAt: true,
 } satisfies Prisma.SearchSelect;
 
-export interface CachedSearch {
-  id: string;
-  resultsCount: number;
-  lastRunAt: Date;
+/** Contagem por fonte gravada como JSON: só números de fontes conhecidas passam. */
+export function parseSourceCounts(value: unknown): SourceCounts {
+  const counts: SourceCounts = {};
+  if (!value || typeof value !== "object") return counts;
+  for (const source of LEAD_SOURCES) {
+    const count = (value as Record<string, unknown>)[source];
+    if (typeof count === "number" && Number.isFinite(count)) counts[source] = count;
+  }
+  return counts;
 }
 
-/** Pesquisa ainda dentro da validade. null significa "precisa consultar a API". */
-export async function findFreshSearch(cacheKey: string): Promise<CachedSearch | null> {
+/** Pesquisa gravada com esta chave, vencida ou não - o serviço decide o que fazer. */
+export async function findSearchByCacheKey(cacheKey: string): Promise<SearchCacheEntry | null> {
   try {
-    return await prisma.search.findFirst({
-      where: { cacheKey, expiresAt: { gt: new Date() } },
-      select: { id: true, resultsCount: true, lastRunAt: true },
+    const row = await prisma.search.findUnique({
+      where: { cacheKey },
+      select: { id: true, fetchLimit: true, rawCount: true, expiresAt: true, sourceCounts: true, warnings: true },
     });
+    return row ? { ...row, sourceCounts: parseSourceCounts(row.sourceCounts) } : null;
   } catch (error) {
     throw new AppError("DATABASE_ERROR", undefined, error);
   }
 }
 
-/** Registra que uma pesquisa foi respondida pelo cache (metrica de economia). */
+/** Registra que uma pesquisa foi respondida pelo cache (métrica de economia). */
 export async function registerCacheHit(searchId: string): Promise<void> {
   try {
     await prisma.search.update({
@@ -72,49 +66,39 @@ export async function registerCacheHit(searchId: string): Promise<void> {
   }
 }
 
-export interface SaveSearchInput {
-  cacheKey: string;
-  provider: string;
-  search: NormalizedSearch;
-  leadIds: readonly string[];
-  requests: number;
-  ttlMs: number;
-}
-
 /** Grava a pesquisa e o vinculo com os leads encontrados, preservando a ordem. */
-export async function saveSearch({
-  cacheKey,
-  provider,
-  search,
-  leadIds,
-  requests,
-  ttlMs,
-}: SaveSearchInput): Promise<string> {
+export async function saveSearch(record: SaveSearchRecord, ttlMs: number): Promise<string> {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ttlMs);
 
   try {
-    const record = await prisma.search.upsert({
-      where: { cacheKey },
+    const saved = await prisma.search.upsert({
+      where: { cacheKey: record.cacheKey },
       create: {
-        cacheKey,
-        provider,
-        term: search.term,
-        keyword: search.keyword,
-        city: search.city,
-        state: search.state,
-        neighborhood: search.neighborhood,
-        country: search.country,
-        radiusMeters: search.radiusMeters,
-        latitude: search.latitude,
-        longitude: search.longitude,
-        resultsCount: leadIds.length,
-        requestCount: requests,
+        cacheKey: record.cacheKey,
+        provider: record.source,
+        term: record.query,
+        city: record.city,
+        state: record.state,
+        extraCities: [...record.extraCities],
+        sourceCounts: record.sourceCounts,
+        warnings: [...record.warnings],
+        country: "BR",
+        resultsCount: record.leadIds.length,
+        requestCount: record.requests,
+        fetchLimit: record.fetchLimit,
+        rawCount: record.rawCount,
         expiresAt,
       },
       update: {
-        resultsCount: leadIds.length,
-        requestCount: { increment: requests },
+        term: record.query,
+        extraCities: [...record.extraCities],
+        sourceCounts: record.sourceCounts,
+        warnings: [...record.warnings],
+        resultsCount: record.leadIds.length,
+        requestCount: { increment: record.requests },
+        fetchLimit: record.fetchLimit,
+        rawCount: record.rawCount,
         runCount: { increment: 1 },
         lastRunAt: now,
         expiresAt,
@@ -123,26 +107,26 @@ export async function saveSearch({
     });
 
     await prisma.$transaction([
-      prisma.searchResult.deleteMany({ where: { searchId: record.id } }),
+      prisma.searchResult.deleteMany({ where: { searchId: saved.id } }),
       prisma.searchResult.createMany({
-        data: leadIds.map((leadId, position) => ({ searchId: record.id, leadId, position })),
+        data: record.leadIds.map((leadId, position) => ({ searchId: saved.id, leadId, position })),
         skipDuplicates: true,
       }),
     ]);
 
-    return record.id;
+    return saved.id;
   } catch (error) {
     throw new AppError("DATABASE_ERROR", undefined, error);
   }
 }
 
-type SearchRow = Omit<SearchHistoryItem, "isCacheFresh">;
+type SearchRow = Omit<SearchHistoryItem, "isCacheFresh" | "sourceCounts"> & { sourceCounts: unknown };
 
 function withFreshness(row: SearchRow, now: number): SearchHistoryItem {
-  return { ...row, isCacheFresh: row.expiresAt.getTime() > now };
+  return { ...row, sourceCounts: parseSourceCounts(row.sourceCounts), isCacheFresh: row.expiresAt.getTime() > now };
 }
 
-/** Dados da pesquisa usados para preencher o formulario e resumir o resultado. */
+/** Dados da pesquisa usados para preencher o formulário e resumir o resultado. */
 export async function findSearchById(id: string): Promise<SearchHistoryItem | null> {
   try {
     const row = await prisma.search.findUnique({ where: { id }, select: SEARCH_SELECT });
@@ -172,23 +156,23 @@ export interface ApiUsageInput {
   requests: number;
   items: number;
   success: boolean;
-  /** Custo estimado, quando conhecido (hoje so as chamadas de IA tem preco). */
+  /** Custo estimado, quando conhecido (só as chamadas de IA tem preço). */
   costUsd?: number | null;
 }
 
 /**
  * Registro simples de consumo de API. Falhar aqui nunca pode derrubar a
- * operacao principal - metrica e efeito colateral.
+ * operação principal - métrica e efeito colateral.
  */
 export async function recordApiUsage(input: ApiUsageInput): Promise<void> {
   try {
     await prisma.apiUsage.create({ data: input });
   } catch {
-    // Silencioso de proposito: metrica nao interrompe a busca do usuario.
+    // Silencioso de propósito: métrica não interrompe a busca do usuário.
   }
 }
 
-/** Metricas de consumo: mostram quanto o cache esta economizando. */
+/** Métricas de consumo: mostram quanto o cache esta economizando. */
 export interface UsageStats {
   searches: number;
   runs: number;
@@ -196,7 +180,7 @@ export interface UsageStats {
   providerRequests: number;
   analyzedWebsites: number;
   aiAnalyses: number;
-  /** Custo acumulado estimado das chamadas com preco conhecido (hoje, a IA). */
+  /** Custo acumulado estimado das chamadas com preço conhecido (hoje, a IA). */
   aiCostUsd: number;
 }
 

@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorNotice, PageHeader, Panel } from "@/components/ui/feedback";
 import { userMessage } from "@/lib/errors";
 import { listRecentSearches } from "@/server/repositories/search-repository";
+import { leadSourceLabel } from "@/types/lead";
 import type { SearchHistoryItem } from "@/types/search";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Historico" };
+export const metadata: Metadata = { title: "Histórico" };
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
@@ -26,12 +27,11 @@ function SearchRow({ search }: { search: SearchHistoryItem }) {
           className="text-sm font-medium text-ink hover:text-accent hover:underline"
         >
           {search.term}
-          {search.keyword ? ` · ${search.keyword}` : ""}
           {place ? ` · ${place}` : ""}
         </Link>
         <p className="mt-0.5 text-xs text-ink-subtle">
-          {dateFormatter.format(search.lastRunAt)} · fonte {search.provider} · {search.runCount}{" "}
-          execucoes
+          {dateFormatter.format(search.lastRunAt)} · fonte {leadSourceLabel(search.provider)} ·{" "}
+          {search.runCount} execuções
         </p>
       </div>
 
@@ -40,13 +40,13 @@ function SearchRow({ search }: { search: SearchHistoryItem }) {
           {search.resultsCount} <span className="text-ink-subtle">leads</span>
         </span>
         <span className="tabular-nums">
-          {search.requestCount} <span className="text-ink-subtle">requisicoes</span>
+          {search.requestCount} <span className="text-ink-subtle">requisições</span>
         </span>
         <span className="tabular-nums">
           {search.cacheHits} <span className="text-ink-subtle">via cache</span>
         </span>
         <Badge tone={search.isCacheFresh ? "positive" : "neutral"}>
-          {search.isCacheFresh ? "Cache valido" : "Cache expirado"}
+          {search.isCacheFresh ? "Cache válido" : "Cache expirado"}
         </Badge>
       </div>
     </li>
@@ -60,7 +60,7 @@ export default async function HistoryPage() {
   } catch (error) {
     return (
       <>
-        <PageHeader title="Historico" />
+        <PageHeader title="Histórico" />
         <ErrorNotice message={userMessage(error)} />
       </>
     );
@@ -69,8 +69,8 @@ export default async function HistoryPage() {
   return (
     <>
       <PageHeader
-        title="Historico"
-        description="Toda pesquisa feita, quantos leads trouxe e quanto custou em requisicoes."
+        title="Histórico"
+        description="Toda pesquisa feita, quantos leads reais trouxe e quantas consultas ao OpenStreetMap usou."
       />
 
       <Panel className="overflow-hidden">
@@ -83,7 +83,7 @@ export default async function HistoryPage() {
         ) : (
           <EmptyState
             title="Nenhuma pesquisa registrada"
-            description="Assim que voce buscar empresas, o historico aparece aqui com o custo de cada consulta."
+            description="Assim que você buscar empresas, o histórico aparece aqui com o custo de cada consulta."
           />
         )}
       </Panel>

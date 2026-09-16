@@ -1,13 +1,13 @@
 /**
- * Analise de oportunidade com a API da Anthropic.
+ * Análise de oportunidade com a API da Anthropic.
  *
  * Economia de tokens, por construcao:
- * - a entrada e um JSON compacto montado pelo servico - nunca HTML de site;
- * - a saida e estruturada (Zod + output_config.format), entao nao ha texto
- *   solto para reprocessar nem parsing fragil;
- * - o esforco (`effort`) e configuravel e vem baixo por padrao, porque
+ * - a entrada e um JSON compacto montado pelo serviço - nunca HTML de site;
+ * - a saída e estruturada (Zod + output_config.format), então não há texto
+ *   solto para reprocessar nem parsing frágil;
+ * - o esforço (`effort`) e configurável e vem baixo por padrão, porque
  *   analisar um lead e uma tarefa pequena;
- * - quem decide se vale gastar e o servico, comparando o hash da entrada.
+ * - quem decide se vale gastar e o serviço, comparando o hash da entrada.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -24,22 +24,22 @@ const analysisSchema = z.object({
   summary: z.string().describe("Resumo em uma frase da oportunidade comercial"),
   problems: z.array(z.string()).describe("Problemas concretos identificados"),
   opportunities: z.array(z.string()).describe("Oportunidades de melhoria para a empresa"),
-  services: z.array(z.string()).describe("Servicos que poderiamos oferecer a ela"),
-  approach: z.string().describe("Sugestao de abordagem comercial, em 2 a 3 frases"),
+  services: z.array(z.string()).describe("Serviços que poderiamos oferecer a ela"),
+  approach: z.string().describe("Sugestão de abordagem comercial, em 2 a 3 frases"),
 });
 
 const SYSTEM_PROMPT = [
-  "Voce analisa empresas para uma agencia que vende presenca digital",
-  "(sites, landing pages, SEO local, trafego pago e automacao de atendimento).",
+  "Você analisa empresas para uma agência que vende presença digital",
+  "(sites, landing pages, SEO local, tráfego pago e automação de atendimento).",
   "",
-  "Recebe um JSON com os dados publicos de uma empresa e responde em portugues",
-  "do Brasil, de forma objetiva e verificavel.",
+  "Recebe um JSON com os dados publicos de uma empresa e responde em português",
+  "do Brasil, de forma objetiva e verificável.",
   "",
   "Regras:",
-  "- baseie-se apenas nos dados recebidos; nao invente fatos, numeros ou nomes;",
-  "- quando um dado estiver ausente, trate como desconhecido, nao como problema;",
+  "- baseie-se apenas nos dados recebidos; não invente fatos, números ou nomes;",
+  "- quando um dado estiver ausente, trate como desconhecido, não como problema;",
   "- de 2 a 5 itens por lista, cada um em uma frase curta;",
-  "- a abordagem comercial deve citar algo especifico da empresa;",
+  "- a abordagem comercial deve citar algo específico da empresa;",
   "- nada de promessas de resultado nem linguagem de venda agressiva.",
 ].join("\n");
 
@@ -64,8 +64,8 @@ export class AnthropicAiProvider implements AiProvider {
       const response = await this.client.beta.messages.parse({
         model,
         max_tokens: serverConfig.ai.maxOutputTokens,
-        // Fallback do lado do servidor: se o modelo recusar por politica, a
-        // propria chamada e reexecutada em um modelo alternativo.
+        // Fallback do lado do servidor: se o modelo recusar por política, a
+        // própria chamada e reexecutada em um modelo alternativo.
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         system: SYSTEM_PROMPT,
@@ -77,8 +77,8 @@ export class AnthropicAiProvider implements AiProvider {
       });
 
       if (response.stop_reason === "refusal") {
-        logger.warn("analise recusada pelo modelo");
-        throw new AppError("PROVIDER_ERROR", "O modelo nao pode analisar esta empresa.");
+        logger.warn("análise recusada pelo modelo");
+        throw new AppError("PROVIDER_ERROR", "O modelo não pode analisar esta empresa.");
       }
 
       const analysis = response.parsed_output;
@@ -90,7 +90,7 @@ export class AnthropicAiProvider implements AiProvider {
       const outputTokens = response.usage.output_tokens;
       const cachedInputTokens = response.usage.cache_read_input_tokens ?? 0;
 
-      logger.info("analise gerada", { model, inputTokens, outputTokens });
+      logger.info("análise gerada", { model, inputTokens, outputTokens });
 
       return {
         analysis,
@@ -108,7 +108,7 @@ export class AnthropicAiProvider implements AiProvider {
   }
 }
 
-/** Erros do SDK viram codigos que a interface sabe explicar. */
+/** Erros do SDK viram códigos que a interface sabe explicar. */
 function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
   if (error instanceof Anthropic.AuthenticationError) {

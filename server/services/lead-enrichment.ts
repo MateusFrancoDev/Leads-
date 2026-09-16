@@ -1,24 +1,17 @@
 /**
- * Enriquecimento sob demanda de um lead.
+ * Enriquecimento sob demanda de um lead: lê de novo o site oficial.
  *
- * Regras de custo:
- * - so roda quando o usuario pede (nunca em massa, nunca na busca);
- * - respeita ENRICHMENT_TTL_HOURS: um lead enriquecido ha pouco nao volta a API;
- * - so preenche campos vazios - dado ja obtido nao e buscado de novo;
- * - a leitura do proprio site (gratuita) tem prioridade sobre a chamada paga.
+ * - Só roda quando o usuário pede e só se o lead tem site.
+ * - Respeita ENRICHMENT_TTL_HOURS: site lido há pouco não é baixado de novo.
+ * - Só preenche campos vazios, sempre com origem "website".
+ * - Nenhuma API paga: a fonte de empresas já trouxe tudo o que tinha na busca.
  */
 
 import { AppError } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
-import {
-  detectSocialPlatform,
-  isBrazilianMobile,
-  normalizeEmail,
-  normalizePhone,
-  normalizeUrl,
-} from "@/lib/normalize";
+import { normalizeBrazilianPhone } from "@/lib/normalize";
+import { toDbEnrichmentStatus } from "@/lib/leads/status";
 import { serverConfig } from "@/server/config";
-import { getActiveProvider } from "@/server/providers";
 import {
   applyLeadEnrichment,
   findLeadById,
@@ -26,26 +19,22 @@ import {
 } from "@/server/repositories/lead-repository";
 import { recordApiUsage } from "@/server/repositories/search-repository";
 import { refreshLeadScore } from "@/server/services/lead-score-refresh";
-import { analyzeWebsite } from "@/server/services/website-analyzer";
-import type { LeadDetail } from "@/types/lead";
+import { crawlLeadWebsite } from "@/server/services/lead-search-service";
+import { WhatsappStatus } from "@/types/lead";
 
 const logger = createLogger("lead-enrichment");
 
 export type EnrichmentOutcome =
-  | { status: "enriched"; fields: string[]; providerRequests: number; score: number }
-  | { status: "skipped"; reason: "recent" | "nothing-new"; providerRequests: number };
+  | { status: "enriched"; fields: string[]; score: number }
+  | { status: "skipped"; reason: "recent" | "nothing-new" | "no-website" | "unreachable" };
 
-/** Rotulos usados na mensagem de atividade e no retorno para a interface. */
-const FIELD_LABELS: Record<keyof LeadEnrichmentUpdate, string> = {
+const FIELD_LABELS: Partial<Record<keyof LeadEnrichmentUpdate, string>> = {
   phone: "telefone",
-  whatsapp: "WhatsApp",
+  whatsappStatus: "WhatsApp",
   email: "e-mail",
   instagram: "Instagram",
   facebook: "Facebook",
   linkedin: "LinkedIn",
-  website: "site",
-  websiteDomain: "dominio",
-  websiteStatus: "situacao do site",
 };
 
 function isRecent(enrichedAt: Date | null): boolean {
@@ -53,90 +42,72 @@ function isRecent(enrichedAt: Date | null): boolean {
   return Date.now() - enrichedAt.getTime() < serverConfig.enrichmentTtlMs;
 }
 
-/** Guarda a rede social encontrada, sem sobrescrever o que o lead ja tem. */
-function collectSocials(lead: LeadDetail, links: readonly string[], update: LeadEnrichmentUpdate) {
-  for (const link of links) {
-    const url = normalizeUrl(link);
-    if (!url) continue;
-    const platform = detectSocialPlatform(url);
-    if (platform === "instagram" && !lead.instagram && !update.instagram) update.instagram = url;
-    if (platform === "facebook" && !lead.facebook && !update.facebook) update.facebook = url;
-    if (platform === "linkedin" && !lead.linkedin && !update.linkedin) update.linkedin = url;
-  }
-}
-
 export async function enrichLead(leadId: string): Promise<EnrichmentOutcome> {
   const lead = await findLeadById(leadId);
   if (!lead) throw new AppError("NOT_FOUND");
-  if (isRecent(lead.enrichedAt)) {
-    return { status: "skipped", reason: "recent", providerRequests: 0 };
+  if (!lead.website) return { status: "skipped", reason: "no-website" };
+  if (isRecent(lead.enrichedAt) && lead.enrichmentStatus !== "FAILED") {
+    return { status: "skipped", reason: "recent" };
+  }
+  if (!serverConfig.crawler.enabled) {
+    throw new AppError("PROVIDER_NOT_CONFIGURED", "A leitura de sites está desligada (WEBSITE_CRAWLER_ENABLED).");
   }
 
-  const update: LeadEnrichmentUpdate = {};
-  let providerRequests = 0;
+  const crawl = await crawlLeadWebsite(lead.website);
+  await recordApiUsage({
+    provider: "website",
+    operation: "crawl",
+    requests: crawl.pagesVisited.length || 1,
+    items: crawl.status === "failed" ? 0 : 1,
+    success: crawl.status !== "failed",
+  });
 
-  // 1) Fonte gratuita: o proprio site da empresa costuma expor e-mail e redes.
-  if (lead.website) {
-    const analysis = await analyzeWebsite(lead.website);
-    const email = normalizeEmail(analysis.email);
-    if (email && !lead.email) update.email = email;
-    collectSocials(lead, analysis.socialLinks, update);
+  const update: LeadEnrichmentUpdate = { enrichmentStatus: toDbEnrichmentStatus(crawl.status) };
+  if (crawl.status === "failed") {
+    await applyLeadEnrichment(leadId, update, "O site oficial não respondeu à leitura");
+    return { status: "skipped", reason: "unreachable" };
   }
 
-  // 2) Fonte paga: so quando ainda falta e-mail ou telefone e existe id no
-  // provider. Lead com os dois contatos completos nao gasta requisicao.
-  const missingEmail = !lead.email && !update.email;
-  const missingPhone = !lead.phone && !update.phone;
-  if (lead.externalId && (missingEmail || missingPhone)) {
-    const provider = getActiveProvider();
-    try {
-      const response = await provider.getBusinessDetails(lead.externalId);
-      providerRequests = response.requests;
+  if (!lead.email && crawl.email) {
+    update.email = crawl.email;
+    update.emailSource = "website";
+  }
+  if (!lead.phone && crawl.phone) {
+    update.phone = crawl.phone;
+    update.phoneSource = "website";
+  }
+  if (!lead.instagram && crawl.instagram) {
+    update.instagram = crawl.instagram;
+    update.instagramSource = "website";
+  }
+  if (!lead.facebook && crawl.facebook) update.facebook = crawl.facebook;
+  if (!lead.linkedin && crawl.linkedin) update.linkedin = crawl.linkedin;
 
-      const details = response.data;
-      if (details) {
-        const phone = normalizePhone(details.phone);
-        if (phone && !lead.phone) {
-          update.phone = phone;
-          if (isBrazilianMobile(phone) && !lead.whatsapp) update.whatsapp = phone;
-        }
-        const email = normalizeEmail(details.email);
-        if (email && !lead.email && !update.email) update.email = email;
-        collectSocials(lead, details.socialLinks, update);
-      }
-
-      await recordApiUsage({
-        provider: provider.name,
-        operation: "getBusinessDetails",
-        requests: providerRequests,
-        items: details ? 1 : 0,
-        success: true,
-      });
-    } catch (error) {
-      await recordApiUsage({
-        provider: provider.name,
-        operation: "getBusinessDetails",
-        requests: providerRequests,
-        items: 0,
-        success: false,
-      });
-      throw error;
-    }
+  if (crawl.whatsappConfirmed && lead.whatsappStatus !== WhatsappStatus.CONFIRMED) {
+    update.whatsappStatus = WhatsappStatus.CONFIRMED;
+    update.whatsappSource = "website";
+    if (!lead.whatsapp && crawl.whatsapp) update.whatsapp = crawl.whatsapp;
+  } else if (
+    lead.whatsappStatus === WhatsappStatus.UNKNOWN &&
+    normalizeBrazilianPhone(update.phone ?? lead.phone)?.isMobile
+  ) {
+    update.whatsappStatus = WhatsappStatus.POSSIBLE;
+    update.whatsappSource = update.phone ? "website" : (lead.phoneSource ?? undefined);
   }
 
-  const fields = (Object.keys(update) as Array<keyof LeadEnrichmentUpdate>).map(
-    (key) => FIELD_LABELS[key],
-  );
+  const fields = (Object.keys(update) as Array<keyof LeadEnrichmentUpdate>)
+    .map((key) => FIELD_LABELS[key])
+    .filter((label): label is string => Boolean(label));
 
   if (fields.length === 0) {
-    // Ainda assim marcamos a tentativa: evita repetir a busca em seguida.
-    await applyLeadEnrichment(leadId, {}, "Enriquecimento sem novos dados");
-    return { status: "skipped", reason: "nothing-new", providerRequests };
+    // Ainda assim marca a leitura: evita repetir o download em seguida.
+    await applyLeadEnrichment(leadId, update, "Site oficial lido, sem dados novos");
+    return { status: "skipped", reason: "nothing-new" };
   }
 
-  await applyLeadEnrichment(leadId, update, `Enriquecido: ${fields.join(", ")}`);
+  await applyLeadEnrichment(leadId, update, `Encontrado no site oficial: ${fields.join(", ")}`);
   const score = await refreshLeadScore(leadId);
 
-  logger.info("lead enriquecido", { leadId, campos: fields.length, providerRequests });
-  return { status: "enriched", fields, providerRequests, score: score.score };
+  logger.info("lead enriquecido", { leadId, campos: fields.length });
+  return { status: "enriched", fields, score: score.score };
 }

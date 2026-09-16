@@ -22,7 +22,7 @@ export function EmptyState({
   );
 }
 
-/** Erro previsivel (provider fora do ar, banco indisponivel). Nunca stack trace. */
+/** Erro previsivel (provider fora do ar, banco indisponível). Nunca stack trace. */
 export function ErrorNotice({ message, className }: { message: string; className?: string }) {
   return (
     <div

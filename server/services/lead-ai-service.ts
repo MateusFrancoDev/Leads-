@@ -1,13 +1,13 @@
 /**
- * Analise de oportunidade por IA, sob demanda.
+ * Análise de oportunidade por IA, sob demanda.
  *
- * O padrao de economia e o mesmo do resto do sistema, aplicado a tokens:
+ * O padrão de economia e o mesmo do resto do sistema, aplicado a tokens:
  *
- *   monta entrada compacta -> calcula hash -> compara com a analise gravada
- *   -> so chama o modelo se algo mudou -> grava resultado e consumo
+ *   monta entrada compacta -> calcula hash -> compara com a análise gravada
+ *   -> só chama o modelo se algo mudou -> grava resultado e consumo
  *
  * Nunca roda em massa e nunca envia HTML: o que vai ao modelo e um resumo
- * estruturado do lead e dos problemas ja extraidos do site.
+ * estruturado do lead e dos problemas já extraidos do site.
  */
 
 import { createHash } from "node:crypto";
@@ -29,7 +29,7 @@ import type { StoredWebsiteAnalysis } from "@/server/repositories/lead-repositor
 
 const logger = createLogger("lead-ai");
 
-/** Quantos problemas do site acompanham a analise - o resto e ruido para o modelo. */
+/** Quantos problemas do site acompanham a análise - o resto e ruído para o modelo. */
 const MAX_SITE_ISSUES = 8;
 
 function buildInput(lead: LeadDetail, site: StoredWebsiteAnalysis | null): AiLeadInput {
@@ -38,11 +38,9 @@ function buildInput(lead: LeadDetail, site: StoredWebsiteAnalysis | null): AiLea
     ramo: lead.category,
     cidade: lead.city,
     estado: lead.state,
-    nota: lead.rating,
-    avaliacoes: lead.reviewsCount,
     situacaoDoSite: lead.websiteStatus,
     temTelefone: Boolean(lead.phone),
-    temWhatsapp: Boolean(lead.whatsapp),
+    situacaoDoWhatsapp: lead.whatsappStatus,
     temEmail: Boolean(lead.email),
     temInstagram: Boolean(lead.instagram),
     leadScore: lead.score,
@@ -60,8 +58,8 @@ function buildInput(lead: LeadDetail, site: StoredWebsiteAnalysis | null): AiLea
 }
 
 /**
- * Hash estavel da entrada. Inclui provider e modelo configurados porque uma
- * analise feita com outro modelo nao pode ser reaproveitada - e o modelo que
+ * Hash estável da entrada. Inclui provider e modelo configurados porque uma
+ * análise feita com outro modelo não pode ser reaproveitada - e o modelo que
  * respondeu (gravado em `model`) pode diferir do pedido quando entra fallback.
  */
 function hashInput(input: AiLeadInput): string {
@@ -89,7 +87,7 @@ function toStored(row: StoredAiAnalysisRow, currentHash: string): StoredAiAnalys
   };
 }
 
-/** Le a analise gravada e diz se ela ainda corresponde aos dados atuais. */
+/** Lê a análise gravada e diz se ela ainda corresponde aos dados atuais. */
 export async function getLeadAiAnalysis(leadId: string): Promise<StoredAiAnalysis | null> {
   const [lead, site, stored] = await Promise.all([
     findLeadById(leadId),
@@ -117,9 +115,9 @@ export async function analyzeLeadOpportunity(leadId: string): Promise<AiAnalysis
   const input = buildInput(lead, site);
   const inputHash = hashInput(input);
 
-  // Nada mudou desde a ultima analise (dados, provider e modelo): nao gasta token.
+  // Nada mudou desde a última análise (dados, provider e modelo): não gasta token.
   if (stored && stored.inputHash === inputHash) {
-    logger.info("analise reaproveitada", { leadId });
+    logger.info("análise reaproveitada", { leadId });
     return { status: "skipped", reason: "current", analysis: toStored(stored, inputHash) };
   }
 
@@ -146,7 +144,7 @@ export async function analyzeLeadOpportunity(leadId: string): Promise<AiAnalysis
       costUsd: response.usage.costUsd,
     });
 
-    logger.info("analise concluida", {
+    logger.info("análise concluida", {
       leadId,
       tokens: response.usage.inputTokens + response.usage.outputTokens,
     });

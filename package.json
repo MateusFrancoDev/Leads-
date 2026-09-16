@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/ts/register.mjs --test \"tests/**/*.test.ts\"",
     "db:generate": "prisma generate",
     "db:local": "prisma dev start leadsapp",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "cnpj:import": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/ts/register.mjs scripts/cnpj-import.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

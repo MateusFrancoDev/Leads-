@@ -1,6 +1,6 @@
 "use server";
 
-/** Server Actions das listas de prospeccao. */
+/** Server Actions das listas de prospecção. */
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -83,7 +83,7 @@ export async function removeLeadFromListAction(
     listId: formData.get("listId"),
     leadId: formData.get("leadId"),
   });
-  if (!parsed.success) return { status: "error", message: "Dados invalidos." };
+  if (!parsed.success) return { status: "error", message: "Dados inválidos." };
 
   try {
     await removeLeadFromList(parsed.data.listId, parsed.data.leadId);
@@ -103,7 +103,7 @@ export async function deleteListAction(
   const parsed = z.object({ listId: z.string().min(1) }).safeParse({
     listId: formData.get("listId"),
   });
-  if (!parsed.success) return { status: "error", message: "Lista invalida." };
+  if (!parsed.success) return { status: "error", message: "Lista inválida." };
 
   try {
     await deleteProspectingList(parsed.data.listId);
@@ -112,7 +112,7 @@ export async function deleteListAction(
     return { status: "error", message: userMessage(error) };
   }
 
-  // A pagina da lista deixou de existir: volta para o indice.
+  // A página da lista deixou de existir: volta para o índice.
   revalidatePath("/listas");
   redirect("/listas");
 }

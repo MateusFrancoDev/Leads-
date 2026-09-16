@@ -1,6 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar";
 
-/** Casca do painel: navegacao fixa a esquerda e area de conteudo rolavel. */
+/** Casca do painel: navegação fixa a esquerda e área de conteúdo rolável. */
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-full flex-col md:flex-row">

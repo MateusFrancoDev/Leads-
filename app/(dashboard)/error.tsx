@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Fronteira de erro do painel. Mostra uma mensagem curta e um botao para
- * tentar de novo - nunca a stack trace. O detalhe tecnico fica no log do
- * servidor, onde ele e util.
+ * Fronteira de erro do painel. Mostra uma mensagem curta e um botão para
+ * tentar de novo - nunca a stack trace. O detalhe técnico fica no log do
+ * servidor, onde ele e útil.
  */
 
 import { useEffect } from "react";
@@ -24,9 +24,9 @@ export default function DashboardError({
 
   return (
     <Panel className="flex flex-col gap-3 p-4">
-      <ErrorNotice message="Algo deu errado ao montar esta pagina." />
+      <ErrorNotice message="Algo deu errado ao montar esta página." />
       <p className="text-sm text-ink-muted">
-        Se o problema continuar, confira a conexao com o banco em Configuracoes.
+        Se o problema continuar, confira a conexão com o banco em Configurações.
       </p>
       <div>
         <Button type="button" variant="primary" size="sm" onClick={reset}>

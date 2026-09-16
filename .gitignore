@@ -52,3 +52,6 @@ next-env.d.ts
 
 
 /generated
+
+# dados baixados (Dados Abertos do CNPJ)
+/data

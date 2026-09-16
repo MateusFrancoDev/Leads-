@@ -17,7 +17,7 @@ export default async function FavoritesPage({ searchParams }: PageProps<"/favori
     <>
       <PageHeader
         title="Favoritos"
-        description="Leads que voce marcou para acompanhar de perto."
+        description="Leads que você marcou para acompanhar de perto."
       />
 
       <Panel className="p-4 md:p-5">

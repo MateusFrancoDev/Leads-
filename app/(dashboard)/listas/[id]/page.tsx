@@ -22,7 +22,7 @@ export default async function ListDetailPage({ params, searchParams }: PageProps
   const list = await findProspectingList(id);
   if (!list) notFound();
 
-  // A listagem e a mesma de sempre, so que presa a esta lista.
+  // A listagem e a mesma de sempre, só que presa a esta lista.
   const filters = { ...parseLeadFilters(await searchParams), listId: id };
 
   return (

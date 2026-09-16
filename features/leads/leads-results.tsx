@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorNotice, Panel } from "@/components/ui/feedback";
@@ -10,7 +11,7 @@ import { findLeads, type LeadPage } from "@/server/repositories/lead-repository"
 
 type LoadResult = { ok: true; page: LeadPage } | { ok: false; message: string };
 
-/** Busca isolada da renderizacao: erro de banco vira mensagem, nunca stack trace. */
+/** Busca isolada da renderização: erro de banco vira mensagem, nunca stack trace. */
 async function loadLeads(filters: LeadFilters): Promise<LoadResult> {
   try {
     return { ok: true, page: await findLeads(filters) };
@@ -19,7 +20,7 @@ async function loadLeads(filters: LeadFilters): Promise<LoadResult> {
   }
 }
 
-/** Filtros ativos viajam junto com a exportacao, como campos escondidos. */
+/** Filtros ativos viajam junto com a exportação, como campos escondidos. */
 function FilterFields({ filters }: { filters: LeadFilters }) {
   const query = buildLeadFiltersQuery(filters, { limit: undefined });
   const entries = [...new URLSearchParams(query.replace(/^\?/, "")).entries()];
@@ -34,22 +35,25 @@ function FilterFields({ filters }: { filters: LeadFilters }) {
 }
 
 /**
- * Lista paginada de leads. Le sempre do banco (nunca do provider) e traz
- * apenas o tamanho de pagina configurado - "Carregar mais" aumenta o limite.
+ * Lista paginada de leads. Lê sempre do banco (nunca do provider) e traz
+ * apenas o tamanho de página configurado - "Carregar mais" aumenta o limite.
  *
- * A tabela vive dentro de um formulario GET que aponta para a exportacao:
- * marcar leads e clicar em exportar baixa so os marcados, sem JavaScript.
+ * A tabela vive dentro de um formulário GET que aponta para a exportação:
+ * marcar leads e clicar em exportar baixa só os marcados, sem JavaScript.
  */
 export async function LeadsResults({
   filters,
   basePath,
   emptyTitle = "Nenhum lead encontrado",
-  emptyDescription = "Ajuste os filtros ou faca uma nova busca para trazer empresas.",
+  emptyDescription = "Ajuste os filtros ou faça uma nova busca para trazer empresas.",
+  emptyAction,
 }: {
   filters: LeadFilters;
   basePath: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  /** Ação principal do estado vazio; padrão: ir para a busca. */
+  emptyAction?: ReactNode;
 }) {
   const result = await loadLeads(filters);
   if (!result.ok) return <ErrorNotice message={result.message} />;
@@ -63,9 +67,11 @@ export async function LeadsResults({
           title={emptyTitle}
           description={emptyDescription}
           action={
-            <Link href="/buscar" className={buttonClasses("secondary", "sm")}>
-              Buscar empresas
-            </Link>
+            emptyAction ?? (
+              <Link href="/buscar" className={buttonClasses("secondary", "sm")}>
+                Buscar empresas
+              </Link>
+            )
           }
         />
       </Panel>

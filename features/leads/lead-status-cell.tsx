@@ -3,10 +3,10 @@
 /**
  * Altera o status do lead direto na tabela.
  *
- * Nao usa <form> de proposito: a tabela inteira ja vive dentro do formulario
- * de exportacao, e formularios aninhados sao HTML invalido. A acao e chamada
+ * Não usa <form> de propósito: a tabela inteira já vive dentro do formulário
+ * de exportação, e formulários aninhados são HTML inválido. A ação e chamada
  * diretamente com um FormData montado na mao - mesma Server Action validada
- * que a pagina de detalhes usa, sem duplicar regra.
+ * que a página de detalhes usa, sem duplicar regra.
  */
 
 import { startTransition, useActionState } from "react";

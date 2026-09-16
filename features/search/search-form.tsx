@@ -1,20 +1,34 @@
 "use client";
 
 /**
- * Formulario de busca. Client Component por causa do estado de envio
- * (useActionState) - a busca so acontece no submit, nunca a cada tecla
- * digitada, de modo que digitar nao gasta requisicao de API.
+ * Formulário de busca. Client Component por causa do estado de envio
+ * (useActionState). A busca só acontece no submit, nunca a cada tecla: digitar
+ * não gera nenhuma consulta ao OpenStreetMap.
  */
 
 import { useActionState } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ErrorNotice } from "@/components/ui/feedback";
-import { Field, Input, Select, TriStateField } from "@/components/ui/form";
+import { Field, Input, OptionsField, Select, TriStateField } from "@/components/ui/form";
+import { listCategoryLabels } from "@/lib/leads/category-mapper";
+import {
+  DEFAULT_SEARCH_QUANTITY,
+  MAX_SEARCH_QUANTITY,
+  SITE_FILTER_LABELS,
+  SITE_FILTER_OPTIONS,
+  WHATSAPP_FILTER_LABELS,
+  WHATSAPP_FILTER_OPTIONS,
+  toSelectOptions,
+} from "@/lib/leads/filter-options";
+import { BRAZILIAN_STATE_CODES } from "@/lib/normalize";
 import type { LeadFilters } from "@/lib/validation";
 import { initialSearchActionState, runSearchAction } from "@/server/actions/search-actions";
-import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER } from "@/types/lead";
 import type { SearchHistoryItem } from "@/types/search";
+
+const CATEGORY_SUGGESTIONS = listCategoryLabels();
+const SITE_OPTIONS = toSelectOptions(SITE_FILTER_OPTIONS, SITE_FILTER_LABELS);
+const WHATSAPP_OPTIONS = toSelectOptions(WHATSAPP_FILTER_OPTIONS, WHATSAPP_FILTER_LABELS);
 
 export function SearchForm({
   filters,
@@ -30,99 +44,95 @@ export function SearchForm({
     <form action={formAction} className="flex flex-col gap-5">
       {state.status === "error" && state.message ? <ErrorNotice message={state.message} /> : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Field
-          label="Ramo / nicho"
-          htmlFor="term"
-          error={errors.term}
-          className="sm:col-span-2 lg:col-span-2"
+          label="Segmento"
+          htmlFor="query"
+          error={errors.query}
+          className="sm:col-span-2"
+          hint="Ex.: barbearia, dentista, pet shop"
         >
           <Input
-            id="term"
-            name="term"
+            id="query"
+            name="query"
             required
+            list="segment-suggestions"
             defaultValue={lastSearch?.term ?? ""}
-            placeholder="Clinicas de estetica"
-            aria-invalid={Boolean(errors.term)}
-            aria-describedby={errors.term ? "term-error" : undefined}
+            placeholder="Barbearia"
+            aria-invalid={Boolean(errors.query)}
+            aria-describedby={errors.query ? "query-error" : undefined}
           />
+          <datalist id="segment-suggestions">
+            {CATEGORY_SUGGESTIONS.map((label) => (
+              <option key={label} value={label} />
+            ))}
+          </datalist>
         </Field>
-        <Field label="Palavra-chave" htmlFor="keyword" error={errors.keyword}>
-          <Input
-            id="keyword"
-            name="keyword"
-            defaultValue={lastSearch?.keyword ?? ""}
-            placeholder="Opcional"
-          />
-        </Field>
-        <Field label="Raio (km)" htmlFor="radiusKm" error={errors.radiusKm}>
-          <Input
-            id="radiusKm"
-            name="radiusKm"
-            type="number"
-            min={1}
-            max={50}
-            defaultValue={lastSearch?.radiusMeters ? lastSearch.radiusMeters / 1000 : ""}
-            placeholder="10"
-          />
-        </Field>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Cidade" htmlFor="city" error={errors.city}>
-          <Input id="city" name="city" defaultValue={lastSearch?.city ?? ""} placeholder="Osasco" />
+          <Input
+            id="city"
+            name="city"
+            required
+            defaultValue={lastSearch?.city ?? ""}
+            placeholder="Osasco"
+            aria-invalid={Boolean(errors.city)}
+            aria-describedby={errors.city ? "city-error" : undefined}
+          />
         </Field>
         <Field label="Estado" htmlFor="state" error={errors.state}>
-          <Input id="state" name="state" defaultValue={lastSearch?.state ?? ""} placeholder="SP" />
+          <Select id="state" name="state" required defaultValue={lastSearch?.state ?? "SP"}>
+            {BRAZILIAN_STATE_CODES.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </Select>
         </Field>
-        <Field label="Bairro" htmlFor="neighborhood" error={errors.neighborhood}>
+        <Field
+          label="Cidades vizinhas"
+          htmlFor="nearbyCities"
+          error={errors.nearbyCities}
+          className="sm:col-span-2 lg:col-span-4"
+          hint="Opcional. Mesma UF, separadas por vírgula (ex.: Barueri, Carapicuíba). Até 5."
+        >
           <Input
-            id="neighborhood"
-            name="neighborhood"
-            defaultValue={lastSearch?.neighborhood ?? ""}
-            placeholder="Centro"
+            id="nearbyCities"
+            name="nearbyCities"
+            defaultValue={lastSearch?.extraCities.join(", ") ?? ""}
+            placeholder="Barueri, Carapicuíba"
+          />
+        </Field>
+        <Field label="Quantidade" htmlFor="limit" error={errors.limit}>
+          <Input
+            id="limit"
+            name="limit"
+            type="number"
+            min={1}
+            max={MAX_SEARCH_QUANTITY}
+            defaultValue={filters.max ?? DEFAULT_SEARCH_QUANTITY}
           />
         </Field>
       </div>
 
       <fieldset className="flex flex-col gap-3 border-t border-line pt-4">
-        <legend className="sr-only">Filtros de qualificacao</legend>
+        <legend className="sr-only">Filtros de qualificação</legend>
         <p className="text-xs font-medium text-ink-muted">
-          Qualificacao{" "}
-          <span className="font-normal text-ink-subtle">
-            (aplicada aos resultados, sem custo extra de API)
-          </span>
+          Qualificação{" "}
+          <span className="font-normal text-ink-subtle">(aplicada aos resultados, sem consulta extra)</span>
         </p>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <TriStateField name="website" label="Website proprio" defaultValue={filters.website} />
-          <TriStateField name="phone" label="Telefone" defaultValue={filters.phone} />
-          <TriStateField name="whatsapp" label="WhatsApp" defaultValue={filters.whatsapp} />
-          <TriStateField name="instagram" label="Instagram" defaultValue={filters.instagram} />
-
-          <Field label="Nota minima" htmlFor="minRating">
-            <Input
-              id="minRating"
-              name="minRating"
-              type="number"
-              min={0}
-              max={5}
-              step={0.1}
-              defaultValue={filters.minRating ?? ""}
-              placeholder="4"
-            />
-          </Field>
-          <Field label="Avaliacoes (min)" htmlFor="minReviews">
-            <Input
-              id="minReviews"
-              name="minReviews"
-              type="number"
-              min={0}
-              defaultValue={filters.minReviews ?? ""}
-              placeholder="20"
-            />
-          </Field>
-          <Field label="Score minimo" htmlFor="minScore">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <OptionsField name="site" label="Status do site" defaultValue={filters.site} options={SITE_OPTIONS} />
+          <TriStateField name="phone" label="Possui telefone" defaultValue={filters.phone} />
+          <OptionsField
+            name="whatsapp"
+            label="WhatsApp"
+            defaultValue={filters.whatsapp}
+            options={WHATSAPP_OPTIONS}
+          />
+          <TriStateField name="instagram" label="Possui Instagram" defaultValue={filters.instagram} />
+          <TriStateField name="email" label="Possui e-mail" defaultValue={filters.email} />
+          <Field label="Score mínimo" htmlFor="minScore">
             <Input
               id="minScore"
               name="minScore"
@@ -130,29 +140,20 @@ export function SearchForm({
               min={0}
               max={100}
               defaultValue={filters.minScore ?? ""}
-              placeholder="70"
+              placeholder="30"
             />
-          </Field>
-          <Field label="Status" htmlFor="status">
-            <Select id="status" name="status" defaultValue={filters.status ?? ""}>
-              <option value="">Todos</option>
-              {LEAD_STATUS_ORDER.map((status) => (
-                <option key={status} value={status}>
-                  {LEAD_STATUS_LABELS[status]}
-                </option>
-              ))}
-            </Select>
           </Field>
         </div>
       </fieldset>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="primary" disabled={pending}>
           <Search className="size-4" aria-hidden />
-          {pending ? "Buscando..." : "Buscar empresas"}
+          {pending ? "Buscando..." : "Buscar leads"}
         </Button>
         <p className="text-xs text-ink-subtle">
-          Buscas repetidas sao respondidas pelo cache do banco.
+          Fontes: OpenStreetMap e Receita Federal (cidades importadas). Só empresas reais; o que a
+          fonte não informa fica em branco. Buscas repetidas são respondidas pelo banco.
         </p>
       </div>
     </form>

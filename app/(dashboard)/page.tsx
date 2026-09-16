@@ -5,7 +5,7 @@ import { LeadsTable } from "@/features/leads/leads-table";
 import { userMessage } from "@/lib/errors";
 import { findTopOpportunities, getLeadStats } from "@/server/repositories/lead-repository";
 import { getUsageStats, listRecentSearches, type UsageStats } from "@/server/repositories/search-repository";
-import type { LeadStats } from "@/types/lead";
+import { leadSourceLabel, type LeadStats } from "@/types/lead";
 import type { SearchHistoryItem } from "@/types/search";
 
 export const dynamic = "force-dynamic";
@@ -39,31 +39,31 @@ function StatsGrid({ stats }: { stats: LeadStats }) {
   return (
     <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-4">
       <Stat label="Total de leads" value={stats.total} />
-      <Stat label="Sem site proprio" value={stats.withoutWebsite} hint="Maior oportunidade" />
+      <Stat label="Sem site conhecido" value={stats.withoutKnownWebsite} hint="Não informado na fonte" />
       <Stat label="Score alto" value={stats.highScore} hint="70 ou mais" />
       <Stat label="Novos" value={stats.new} />
       <Stat label="Contatados" value={stats.contacted} />
       <Stat label="Interessados" value={stats.interested} />
-      <Stat label="Clientes" value={stats.customers} />
-      <Stat label="Enriquecidos" value={stats.enriched} hint="Sob demanda" />
+      <Stat label="Clientes" value={stats.clients} />
+      <Stat label="Sites lidos" value={stats.enriched} hint="Crawler do site oficial" />
     </dl>
   );
 }
 
-/** Painel de custo: o cache so vale se der para medir o quanto economizou. */
+/** Painel de custo: o cache só vale se der para medir o quanto economizou. */
 function UsageGrid({ usage }: { usage: UsageStats }) {
   const savedPercent = usage.runs > 0 ? Math.round((usage.cacheHits / usage.runs) * 100) : 0;
 
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-medium text-ink">Consumo de API</h2>
+      <h2 className="text-sm font-medium text-ink">Consultas externas</h2>
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line lg:grid-cols-4">
         <Stat label="Pesquisas distintas" value={usage.searches} />
-        <Stat label="Execucoes" value={usage.runs} hint="Incluindo repeticoes" />
-        <Stat label="Respondidas pelo cache" value={usage.cacheHits} hint={`${savedPercent}% das execucoes`} />
-        <Stat label="Requisicoes gastas" value={usage.providerRequests} hint="Chamadas ao provider" />
+        <Stat label="Execuções" value={usage.runs} hint="Incluindo repetições" />
+        <Stat label="Respondidas pelo cache" value={usage.cacheHits} hint={`${savedPercent}% das execuções`} />
+        <Stat label="Requisições externas" value={usage.providerRequests} hint="OpenStreetMap, gratuitas" />
         <Stat label="Sites analisados" value={usage.analyzedWebsites} hint="Sem custo de API" />
-        <Stat label="Analises de IA" value={usage.aiAnalyses} hint="Sob demanda" />
+        <Stat label="Análises de IA" value={usage.aiAnalyses} hint="Sob demanda" />
         <Stat
           label="Custo estimado de IA"
           value={`US$ ${usage.aiCostUsd.toFixed(2)}`}
@@ -79,7 +79,7 @@ function RecentSearches({ searches }: { searches: readonly SearchHistoryItem[] }
     return (
       <EmptyState
         title="Nenhuma pesquisa ainda"
-        description="Faca a primeira busca para comecar a montar sua base de leads."
+        description="Faça a primeira busca para começar a montar sua base de leads."
       />
     );
   }
@@ -99,7 +99,7 @@ function RecentSearches({ searches }: { searches: readonly SearchHistoryItem[] }
             </Link>
             <p className="mt-0.5 text-xs text-ink-subtle">
               {dateFormatter.format(search.lastRunAt)} · {search.resultsCount} leads ·{" "}
-              {search.provider}
+              {leadSourceLabel(search.provider)}
             </p>
           </div>
           <span className="shrink-0 text-xs tabular-nums text-ink-subtle">
@@ -127,7 +127,7 @@ export default async function DashboardPage() {
   } catch (error) {
     return (
       <>
-        <PageHeader title="Dashboard" description="Visao geral da sua base de leads." />
+        <PageHeader title="Dashboard" description="Visão geral da sua base de leads." />
         <ErrorNotice message={userMessage(error)} />
         <p className="text-sm text-ink-muted">
           Confira <code className="font-mono text-xs">DATABASE_URL</code> no arquivo{" "}
@@ -142,7 +142,7 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title="Dashboard"
-        description="Visao geral da sua base de leads."
+        description="Visão geral da sua base de leads."
         actions={
           <Link href="/buscar" className={buttonClasses("primary", "sm")}>
             Buscar leads
@@ -156,7 +156,7 @@ export default async function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-ink">Ultimas pesquisas</h2>
+          <h2 className="text-sm font-medium text-ink">Últimas pesquisas</h2>
           <Panel className="overflow-hidden">
             <RecentSearches searches={searches} />
           </Panel>

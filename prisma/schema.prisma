@@ -1,5 +1,5 @@
-// Schema da plataforma de captacao de leads B2B.
-// Os valores dos enums sao espelhados em types/lead.ts (fonte unica para o client).
+// Schema da plataforma de captação de leads B2B.
+// Os valores dos enums são espelhados em types/lead.ts (fonte única para o client).
 // Docs: https://pris.ly/d/prisma-schema
 
 generator client {
@@ -11,25 +11,45 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Situacao do site proprio da empresa. Rede social nao conta como site.
+/// Situação do site próprio da empresa. Rede social não conta como site.
+/// Ausência do dado na fonte NÃO é prova de que a empresa não tem site:
+/// esse caso é NOT_PROVIDED. NO_WEBSITE fica reservado para ausência comprovada.
 enum WebsiteStatus {
   HAS_WEBSITE
   NO_WEBSITE
+  NOT_PROVIDED
   INVALID_WEBSITE
   UNREACHABLE_WEBSITE
   SOCIAL_ONLY
   UNKNOWN
 }
 
-/// Estagio do lead no funil (CRM basico).
+/// Confiança no WhatsApp: CONFIRMED só com link wa.me/api.whatsapp.com ou
+/// etiqueta explícita na fonte; celular sozinho é apenas POSSIBLE.
+enum WhatsappStatus {
+  CONFIRMED
+  POSSIBLE
+  UNKNOWN
+}
+
+/// Resultado da leitura do site oficial (crawler).
+enum EnrichmentStatus {
+  PENDING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+/// Estagio do lead no funil (CRM básico).
 enum LeadStatus {
   NEW
   QUALIFIED
   CONTACTED
   RESPONDED
   INTERESTED
-  CUSTOMER
-  NOT_INTERESTED
+  PROPOSAL_SENT
+  CLIENT
+  DISCARDED
   INVALID
 }
 
@@ -40,7 +60,7 @@ enum ScoreLevel {
   HIGH
 }
 
-/// Tipo de evento registrado no historico do lead.
+/// Tipo de evento registrado no histórico do lead.
 enum LeadActivityType {
   DISCOVERED
   STATUS_CHANGED
@@ -54,19 +74,21 @@ enum LeadActivityType {
 model Lead {
   id String @id @default(cuid())
 
-  /// Nome do provider que descobriu o lead (ex.: "google_places").
+  /// Fonte que descobriu o lead (ex.: "openstreetmap").
   provider   String
-  /// Id da empresa no provider (place_id no Google). Ausente em leads manuais.
+  /// Id real na fonte (OpenStreetMap: "node/123", "way/123", "relation/123").
   externalId String?
-  /// Chave de deduplicacao: nome + telefone + cidade normalizados.
+  /// Chave única de último recurso: "fonte:externalId" (ou nome normalizado sem id).
   dedupeKey  String
 
   name     String
   category String?
 
-  phone    String?
-  whatsapp String?
-  email    String?
+  phone          String?
+  /// Só preenchido com número confirmado (link wa.me ou etiqueta da fonte).
+  whatsapp       String?
+  whatsappStatus WhatsappStatus @default(UNKNOWN)
+  email          String?
 
   website       String?
   websiteDomain String?
@@ -76,7 +98,17 @@ model Lead {
   facebook  String?
   linkedin  String?
 
+  /// Rastreabilidade: de onde veio cada contato ("openstreetmap" | "website").
+  phoneSource     String?
+  whatsappSource  String?
+  emailSource     String?
+  websiteSource   String?
+  instagramSource String?
+
+  /// Endereço de exibição (rua + número). street/number guardam as partes.
   address      String?
+  street       String?
+  number       String?
   neighborhood String?
   city         String?
   state        String?
@@ -85,21 +117,26 @@ model Lead {
   latitude     Float?
   longitude    Float?
 
+  /// Legado do Google Places: o OpenStreetMap não tem nota nem avaliações.
   rating       Float?
   reviewsCount Int?
 
+  enrichmentStatus EnrichmentStatus @default(PENDING)
+  /// Etiquetas originais relevantes da fonte, para auditoria.
+  rawData          Json?
+
   score        Int        @default(0)
   scoreLevel   ScoreLevel @default(LOW)
-  /// Motivos legiveis que explicam o score ao usuario.
+  /// Motivos legíveis que explicam o score ao usuário.
   scoreReasons String[]   @default([])
 
   status     LeadStatus @default(NEW)
   isFavorite Boolean    @default(false)
   notes      String?
 
-  /// Ultima vez que os dados basicos foram confirmados junto ao provider.
+  /// Última vez que os dados básicos foram confirmados junto ao provider.
   lastCheckedAt DateTime?
-  /// Ultima vez que o enriquecimento sob demanda rodou.
+  /// Última vez que o enriquecimento sob demanda rodou.
   enrichedAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -114,6 +151,8 @@ model Lead {
   @@unique([dedupeKey])
   @@index([city, state])
   @@index([category])
+  @@index([phone])
+  @@index([websiteDomain])
   @@index([score])
   @@index([websiteStatus])
   @@index([status])
@@ -121,11 +160,11 @@ model Lead {
   @@index([createdAt])
 }
 
-/// Pesquisa executada. Funciona como cache: mesma chave dentro do TTL nao chama a API de novo.
+/// Pesquisa executada. Funciona como cache: mesma chave dentro do TTL não chama a API de novo.
 model Search {
   id String @id @default(cuid())
 
-  /// Chave normalizada da busca (ex.: "google_places|dentista|osasco|sp|5000").
+  /// Chave normalizada da busca (ex.: "openstreetmap|barbearia|osasco|sp").
   cacheKey String @unique
 
   term         String
@@ -139,12 +178,22 @@ model Search {
   longitude    Float?
 
   provider     String
-  resultsCount Int    @default(0)
+  resultsCount Int      @default(0)
+  /// Quantos elementos a fonte foi autorizada a devolver na última consulta.
+  fetchLimit   Int?
+  /// Quantos elementos a fonte devolveu antes da deduplicação.
+  rawCount     Int      @default(0)
+  /// Cidades vizinhas incluídas na busca (além de city).
+  extraCities  String[] @default([])
+  /// Resultados por fonte (ex.: {"openstreetmap": 3, "receita_federal": 120}).
+  sourceCounts Json?
+  /// Avisos das fontes (ex.: cidade ainda não importada da Receita Federal).
+  warnings     String[] @default([])
   /// Quantas chamadas ao provider esta busca custou no total.
-  requestCount Int    @default(0)
-  /// Quantas vezes o usuario repetiu esta busca (cache hits incluidos).
-  runCount     Int    @default(1)
-  cacheHits    Int    @default(0)
+  requestCount Int      @default(0)
+  /// Quantas vezes o usuário repetiu esta busca (cache hits incluídos).
+  runCount     Int      @default(1)
+  cacheHits    Int      @default(0)
 
   createdAt DateTime @default(now())
   lastRunAt DateTime @default(now())
@@ -172,7 +221,7 @@ model SearchResult {
   @@index([leadId])
 }
 
-/// Resultado da analise tecnica do site (Fase 2). Criado sob demanda, nunca em massa.
+/// Resultado da análise técnica do site (Fase 2). Criado sob demanda, nunca em massa.
 model LeadWebsiteAnalysis {
   id     String @id @default(cuid())
   leadId String @unique
@@ -190,10 +239,10 @@ model LeadWebsiteAnalysis {
   hasWhatsapp    Boolean?
   hasAnalytics   Boolean?
   hasMetaPixel   Boolean?
-  /// Title e meta description encontrados, para mostrar ao usuario.
+  /// Title e meta description encontrados, para mostrar ao usuário.
   title          String?
   description    String?
-  /// Hash do conteudo relevante, para nao reanalisar um site que nao mudou.
+  /// Hash do conteúdo relevante, para não reanalisar um site que não mudou.
   contentHash    String?
   issues         String[] @default([])
 
@@ -202,12 +251,12 @@ model LeadWebsiteAnalysis {
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
-/// Historico do lead: descoberta, mudanca de status, enriquecimento.
+/// Histórico do lead: descoberta, mudanca de status, enriquecimento.
 model LeadActivity {
   id        String           @id @default(cuid())
   leadId    String
   type      LeadActivityType
-  /// Descricao curta e legivel do evento.
+  /// Descrição curta e legível do evento.
   message   String
   createdAt DateTime         @default(now())
 
@@ -216,7 +265,78 @@ model LeadActivity {
   @@index([leadId, createdAt])
 }
 
-/// Consumo de API por provider/operacao. Base para acompanhar custo sem observabilidade pesada.
+/// Área de uma cidade resolvida pelo Nominatim. A geografia quase não muda, então
+/// cada cidade é geocodificada uma vez e reaproveitada por todas as buscas.
+model LocationCache {
+  id  String @id @default(cuid())
+  /// Cidade + UF normalizadas (ex.: "osasco|sp").
+  key String @unique
+
+  city        String
+  state       String
+  displayName String
+  /// Elemento OSM que representa a cidade (relation/way/node) e o seu id.
+  osmType     String
+  osmId       String
+  latitude    Float
+  longitude   Float
+  south       Float
+  north       Float
+  west        Float
+  east        Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Cópia local dos Dados Abertos do CNPJ (Receita Federal), só de empresas
+/// ativas das cidades importadas. Preenchida por `npm run cnpj:import`.
+model CnpjEstablishment {
+  /// CNPJ completo, só dígitos.
+  cnpj     String @id
+  cnpjBase String
+
+  tradeName      String?
+  companyName    String?
+  /// CNAE fiscal principal (7 dígitos).
+  cnaeMain       String
+  isHeadquarters Boolean
+
+  streetType   String?
+  street       String?
+  number       String?
+  complement   String?
+  neighborhood String?
+  postalCode   String?
+  state        String
+  cityCode     String
+  cityName     String
+
+  phone1 String?
+  phone2 String?
+  email  String?
+
+  /// Data de início de atividade (AAAAMMDD).
+  startDate    String?
+  /// Mês do conjunto de dados (ex.: "2026-09").
+  datasetMonth String
+
+  @@index([state, cityName, cnaeMain])
+}
+
+/// Cidades já importadas dos Dados Abertos do CNPJ.
+model CnpjImportedCity {
+  /// UF + nome da cidade na Receita (ex.: "SP|OSASCO").
+  key          String   @id
+  state        String
+  cityName     String
+  cityCode     String
+  datasetMonth String
+  rows         Int
+  importedAt   DateTime @default(now())
+}
+
+/// Consumo de API por provider/operação. Base para acompanhar custo sem observabilidade pesada.
 model ApiUsage {
   id        String   @id @default(cuid())
   provider  String
@@ -225,14 +345,14 @@ model ApiUsage {
   /// Quantos itens vieram na resposta (leads, detalhes...).
   items     Int      @default(0)
   success   Boolean  @default(true)
-  /// Custo estimado em dolares, quando o provider tem preco conhecido.
+  /// Custo estimado em dólares, quando o provider tem preço conhecido.
   costUsd   Float?
   createdAt DateTime @default(now())
 
   @@index([provider, operation, createdAt])
 }
 
-/// Lista de prospeccao criada pelo usuario (ex.: "Clinicas sem site - Osasco").
+/// Lista de prospecção criada pelo usuário (ex.: "Clinicas sem site - Osasco").
 model ProspectingList {
   id          String  @id @default(cuid())
   name        String
@@ -264,8 +384,8 @@ model ProspectingListLead {
   @@index([leadId])
 }
 
-/// Analise de oportunidade gerada por IA, sob demanda.
-/// Guardada com o hash da entrada: se os dados do lead nao mudaram, a analise
+/// Análise de oportunidade gerada por IA, sob demanda.
+/// Guardada com o hash da entrada: se os dados do lead não mudaram, a análise
 /// e reaproveitada e nenhum token e gasto de novo.
 model LeadAiAnalysis {
   id     String @id @default(cuid())

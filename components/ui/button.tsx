@@ -15,7 +15,7 @@ const SIZES: Record<ButtonSize, string> = {
   md: "h-9 px-3.5 text-sm gap-2",
 };
 
-/** Classes do botao, reaproveitadas tambem por <Link> com aparencia de botao. */
+/** Classes do botão, reaproveitadas também por <Link> com aparência de botão. */
 export function buttonClasses(
   variant: ButtonVariant = "secondary",
   size: ButtonSize = "md",

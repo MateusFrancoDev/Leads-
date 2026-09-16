@@ -40,7 +40,7 @@ export default async function MapPage({ searchParams }: PageProps<"/mapa">) {
     <>
       <PageHeader
         title="Mapa"
-        description="Onde estao os potenciais clientes. Os mesmos filtros da tabela valem aqui."
+        description="Onde estão os potenciais clientes. Os mesmos filtros da tabela valem aqui."
       />
 
       <Panel className="p-4 md:p-5">
@@ -80,7 +80,7 @@ export default async function MapPage({ searchParams }: PageProps<"/mapa">) {
             ) : null}
             <span className="ml-auto flex items-center gap-2">
               <Badge tone="positive">Score alto</Badge>
-              <Badge tone="warning">Medio</Badge>
+              <Badge tone="warning">Médio</Badge>
               <Badge>Baixo</Badge>
             </span>
           </div>

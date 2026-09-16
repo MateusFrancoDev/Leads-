@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * Acoes do lead que dependem do navegador: copiar telefone, favoritar,
- * enriquecer, analisar o site e alterar status. As mutacoes vao para Server
- * Actions - nenhuma regra de negocio mora aqui.
+ * Ações do lead que dependem do navegador: copiar contatos, abrir canais,
+ * favoritar, ler o site e alterar status. As mutações vão para Server Actions -
+ * nenhuma regra de negócio mora aqui.
  */
 
 import { useActionState, type ReactNode } from "react";
-import { Brain, Globe, Sparkles, Star } from "lucide-react";
-import { Button, type ButtonVariant } from "@/components/ui/button";
+import { AtSign, Brain, CheckCheck, Globe, MapPin, MessageCircle, Sparkles, Star } from "lucide-react";
+import { Button, buttonClasses, type ButtonVariant } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Select } from "@/components/ui/form";
 import { formatPhone } from "@/lib/normalize";
@@ -21,7 +21,7 @@ import {
   updateLeadStatusAction,
   type LeadActionState,
 } from "@/server/actions/lead-actions";
-import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER, type LeadStatus } from "@/types/lead";
+import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER, LeadStatus } from "@/types/lead";
 
 type LeadAction = (state: LeadActionState, formData: FormData) => Promise<LeadActionState>;
 
@@ -37,7 +37,7 @@ function Feedback({ state }: { state: LeadActionState }) {
   );
 }
 
-/** Um formulario por acao: cada botao tem seu proprio pending e sua mensagem. */
+/** Um formulário por ação: cada botão tem seu próprio pending e sua mensagem. */
 function ActionForm({
   action,
   leadId,
@@ -47,6 +47,7 @@ function ActionForm({
   variant = "secondary",
   disabled,
   hint,
+  extraFields,
 }: {
   action: LeadAction;
   leadId: string;
@@ -56,6 +57,7 @@ function ActionForm({
   variant?: ButtonVariant;
   disabled?: boolean;
   hint?: string;
+  extraFields?: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(action, initialLeadActionState);
 
@@ -63,6 +65,9 @@ function ActionForm({
     <div className="flex flex-col gap-1">
       <form action={formAction}>
         <input type="hidden" name="leadId" value={leadId} />
+        {Object.entries(extraFields ?? {}).map(([name, value]) => (
+          <input key={name} type="hidden" name={name} value={value} />
+        ))}
         <Button type="submit" size="sm" variant={variant} disabled={pending || disabled}>
           {icon}
           {pending ? pendingLabel : label}
@@ -105,28 +110,83 @@ function StatusForm({ leadId, status }: { leadId: string; status: LeadStatus }) 
   );
 }
 
+function ExternalButton({ href, label, icon, title }: { href: string; label: string; icon: ReactNode; title?: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow"
+      title={title}
+      className={buttonClasses("secondary", "sm")}
+    >
+      {icon}
+      {label}
+    </a>
+  );
+}
+
+export interface LeadActionsPanelProps {
+  leadId: string;
+  phone: string | null;
+  email: string | null;
+  whatsapp: { href: string; confirmed: boolean } | null;
+  instagram: string | null;
+  website: string | null;
+  locationUrl: string | null;
+  status: LeadStatus;
+  isFavorite: boolean;
+  aiEnabled: boolean;
+}
+
 export function LeadActionsPanel({
   leadId,
   phone,
+  email,
+  whatsapp,
+  instagram,
+  website,
+  locationUrl,
   status,
   isFavorite,
-  hasWebsite,
   aiEnabled,
-}: {
-  leadId: string;
-  phone: string | null;
-  status: LeadStatus;
-  isFavorite: boolean;
-  hasWebsite: boolean;
-  aiEnabled: boolean;
-}) {
+}: LeadActionsPanelProps) {
+  const hasWebsite = Boolean(website);
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start gap-2">
-        {phone ? (
-          <CopyButton value={formatPhone(phone) ?? phone} label="Copiar telefone" />
+        {phone ? <CopyButton value={formatPhone(phone) ?? phone} label="Copiar telefone" /> : null}
+        {email ? <CopyButton value={email} label="Copiar e-mail" /> : null}
+        {whatsapp ? (
+          <ExternalButton
+            href={whatsapp.href}
+            label={whatsapp.confirmed ? "Abrir WhatsApp" : "Tentar WhatsApp"}
+            title={whatsapp.confirmed ? undefined : "Celular sem WhatsApp confirmado"}
+            icon={<MessageCircle className="size-3.5" aria-hidden />}
+          />
         ) : null}
+        {instagram ? (
+          <ExternalButton href={instagram} label="Abrir Instagram" icon={<AtSign className="size-3.5" aria-hidden />} />
+        ) : null}
+        {website ? (
+          <ExternalButton href={website} label="Abrir site" icon={<Globe className="size-3.5" aria-hidden />} />
+        ) : null}
+        {locationUrl ? (
+          <ExternalButton href={locationUrl} label="Abrir localização" icon={<MapPin className="size-3.5" aria-hidden />} />
+        ) : null}
+      </div>
 
+      <div className="flex flex-wrap items-start gap-2 border-t border-line pt-3">
+        <ActionForm
+          action={updateLeadStatusAction}
+          leadId={leadId}
+          label={status === LeadStatus.CONTACTED ? "Já contatado" : "Marcar como contatado"}
+          pendingLabel="Salvando..."
+          variant="primary"
+          disabled={status === LeadStatus.CONTACTED}
+          extraFields={{ status: LeadStatus.CONTACTED }}
+          icon={<CheckCheck className="size-3.5" aria-hidden />}
+        />
         <ActionForm
           action={toggleFavoriteAction}
           leadId={leadId}
@@ -145,10 +205,15 @@ export function LeadActionsPanel({
         <ActionForm
           action={enrichLeadAction}
           leadId={leadId}
-          label="Enriquecer dados"
-          pendingLabel="Procurando..."
+          label="Ler site oficial"
+          pendingLabel="Lendo o site..."
           icon={<Sparkles className="size-3.5" aria-hidden />}
-          hint="Busca e-mail e redes sociais. Consulta paga so se necessario."
+          disabled={!hasWebsite}
+          hint={
+            hasWebsite
+              ? "Procura e-mail, telefone, WhatsApp e redes no próprio site. Sem API paga."
+              : "Sem site informado: não há o que ler."
+          }
         />
 
         <ActionForm
@@ -161,7 +226,7 @@ export function LeadActionsPanel({
           hint={
             hasWebsite
               ? "Verifica HTTPS, mobile, SEO e rastreamento."
-              : "Este lead nao tem site proprio para analisar."
+              : "Sem site informado para analisar."
           }
         />
 
@@ -172,7 +237,7 @@ export function LeadActionsPanel({
             label="Analisar oportunidade"
             pendingLabel="Analisando..."
             icon={<Brain className="size-3.5" aria-hidden />}
-            hint="Usa IA. Se nada mudou desde a ultima analise, nao gasta token."
+            hint="Usa IA. Se nada mudou desde a última análise, não gasta token."
           />
         ) : null}
       </div>

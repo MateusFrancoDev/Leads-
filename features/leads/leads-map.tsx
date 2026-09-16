@@ -4,11 +4,11 @@
  * Mapa dos leads (Leaflet + tiles do OpenStreetMap).
  *
  * Client Component porque o Leaflet manipula o DOM direto. O import e
- * dinamico, dentro do efeito, para que nada dele seja avaliado no servidor.
+ * dinâmico, dentro do efeito, para que nada dele seja avaliado no servidor.
  *
- * Os marcadores sao `circleMarker` (SVG puro): nao dependem dos arquivos de
- * icone do Leaflet, que costumam quebrar com bundler, e aceitam a cor do
- * tema. O conteudo do popup e montado com textContent - nome de empresa vem
+ * Os marcadores são `circleMarker` (SVG puro): não dependem dos arquivos de
+ * ícone do Leaflet, que costumam quebrar com bundler, e aceitam a cor do
+ * tema. O conteúdo do popup e montado com textContent - nome de empresa vem
  * de fora e nunca e interpolado como HTML.
  */
 
@@ -124,7 +124,7 @@ export function LeadsMap({ points }: { points: readonly LeadMapPoint[] }) {
   if (failed) {
     return (
       <div className="flex h-96 items-center justify-center rounded-lg border border-line bg-surface px-6 text-center text-sm text-ink-muted">
-        Nao foi possivel carregar o mapa. Verifique sua conexao com a internet -
+        Não foi possível carregar o mapa. Verifique sua conexão com a internet -
         os tiles vem do OpenStreetMap.
       </div>
     );
