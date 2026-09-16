@@ -1,0 +1,296 @@
+// Schema da plataforma de captacao de leads B2B.
+// Os valores dos enums sao espelhados em types/lead.ts (fonte unica para o client).
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Situacao do site proprio da empresa. Rede social nao conta como site.
+enum WebsiteStatus {
+  HAS_WEBSITE
+  NO_WEBSITE
+  INVALID_WEBSITE
+  UNREACHABLE_WEBSITE
+  SOCIAL_ONLY
+  UNKNOWN
+}
+
+/// Estagio do lead no funil (CRM basico).
+enum LeadStatus {
+  NEW
+  QUALIFIED
+  CONTACTED
+  RESPONDED
+  INTERESTED
+  CUSTOMER
+  NOT_INTERESTED
+  INVALID
+}
+
+/// Faixa do lead score (derivada de score, ver lib/config/lead-score.ts).
+enum ScoreLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+/// Tipo de evento registrado no historico do lead.
+enum LeadActivityType {
+  DISCOVERED
+  STATUS_CHANGED
+  ENRICHED
+  WEBSITE_ANALYZED
+  AI_ANALYZED
+  NOTE
+}
+
+/// Empresa encontrada. E a entidade central: sempre reaproveitada, nunca duplicada.
+model Lead {
+  id String @id @default(cuid())
+
+  /// Nome do provider que descobriu o lead (ex.: "google_places").
+  provider   String
+  /// Id da empresa no provider (place_id no Google). Ausente em leads manuais.
+  externalId String?
+  /// Chave de deduplicacao: nome + telefone + cidade normalizados.
+  dedupeKey  String
+
+  name     String
+  category String?
+
+  phone    String?
+  whatsapp String?
+  email    String?
+
+  website       String?
+  websiteDomain String?
+  websiteStatus WebsiteStatus @default(UNKNOWN)
+
+  instagram String?
+  facebook  String?
+  linkedin  String?
+
+  address      String?
+  neighborhood String?
+  city         String?
+  state        String?
+  country      String?
+  postalCode   String?
+  latitude     Float?
+  longitude    Float?
+
+  rating       Float?
+  reviewsCount Int?
+
+  score        Int        @default(0)
+  scoreLevel   ScoreLevel @default(LOW)
+  /// Motivos legiveis que explicam o score ao usuario.
+  scoreReasons String[]   @default([])
+
+  status     LeadStatus @default(NEW)
+  isFavorite Boolean    @default(false)
+  notes      String?
+
+  /// Ultima vez que os dados basicos foram confirmados junto ao provider.
+  lastCheckedAt DateTime?
+  /// Ultima vez que o enriquecimento sob demanda rodou.
+  enrichedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  searchResults   SearchResult[]
+  activities      LeadActivity[]
+  websiteAnalysis LeadWebsiteAnalysis?
+  aiAnalysis      LeadAiAnalysis?
+  lists           ProspectingListLead[]
+
+  @@unique([provider, externalId])
+  @@unique([dedupeKey])
+  @@index([city, state])
+  @@index([category])
+  @@index([score])
+  @@index([websiteStatus])
+  @@index([status])
+  @@index([isFavorite])
+  @@index([createdAt])
+}
+
+/// Pesquisa executada. Funciona como cache: mesma chave dentro do TTL nao chama a API de novo.
+model Search {
+  id String @id @default(cuid())
+
+  /// Chave normalizada da busca (ex.: "google_places|dentista|osasco|sp|5000").
+  cacheKey String @unique
+
+  term         String
+  keyword      String?
+  city         String?
+  state        String?
+  neighborhood String?
+  country      String?
+  radiusMeters Int?
+  latitude     Float?
+  longitude    Float?
+
+  provider     String
+  resultsCount Int    @default(0)
+  /// Quantas chamadas ao provider esta busca custou no total.
+  requestCount Int    @default(0)
+  /// Quantas vezes o usuario repetiu esta busca (cache hits incluidos).
+  runCount     Int    @default(1)
+  cacheHits    Int    @default(0)
+
+  createdAt DateTime @default(now())
+  lastRunAt DateTime @default(now())
+  expiresAt DateTime
+
+  results SearchResult[]
+
+  @@index([lastRunAt])
+  @@index([expiresAt])
+}
+
+/// Liga uma pesquisa aos leads que ela retornou, preservando a ordem do provider.
+model SearchResult {
+  id       String @id @default(cuid())
+  searchId String
+  leadId   String
+  position Int
+
+  createdAt DateTime @default(now())
+
+  search Search @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([searchId, leadId])
+  @@index([leadId])
+}
+
+/// Resultado da analise tecnica do site (Fase 2). Criado sob demanda, nunca em massa.
+model LeadWebsiteAnalysis {
+  id     String @id @default(cuid())
+  leadId String @unique
+
+  finalUrl       String?
+  httpStatus     Int?
+  responseTimeMs Int?
+  hasHttps       Boolean?
+  hasViewport    Boolean?
+  hasTitle       Boolean?
+  hasDescription Boolean?
+  hasFavicon     Boolean?
+  hasContactForm Boolean?
+  hasPhone       Boolean?
+  hasWhatsapp    Boolean?
+  hasAnalytics   Boolean?
+  hasMetaPixel   Boolean?
+  /// Title e meta description encontrados, para mostrar ao usuario.
+  title          String?
+  description    String?
+  /// Hash do conteudo relevante, para nao reanalisar um site que nao mudou.
+  contentHash    String?
+  issues         String[] @default([])
+
+  checkedAt DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+/// Historico do lead: descoberta, mudanca de status, enriquecimento.
+model LeadActivity {
+  id        String           @id @default(cuid())
+  leadId    String
+  type      LeadActivityType
+  /// Descricao curta e legivel do evento.
+  message   String
+  createdAt DateTime         @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt])
+}
+
+/// Consumo de API por provider/operacao. Base para acompanhar custo sem observabilidade pesada.
+model ApiUsage {
+  id        String   @id @default(cuid())
+  provider  String
+  operation String
+  requests  Int      @default(1)
+  /// Quantos itens vieram na resposta (leads, detalhes...).
+  items     Int      @default(0)
+  success   Boolean  @default(true)
+  /// Custo estimado em dolares, quando o provider tem preco conhecido.
+  costUsd   Float?
+  createdAt DateTime @default(now())
+
+  @@index([provider, operation, createdAt])
+}
+
+/// Lista de prospeccao criada pelo usuario (ex.: "Clinicas sem site - Osasco").
+model ProspectingList {
+  id          String  @id @default(cuid())
+  name        String
+  /// Nome normalizado: evita duas listas com o mesmo nome.
+  slug        String  @unique
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads ProspectingListLead[]
+
+  @@index([updatedAt])
+}
+
+/// Vinculo entre lista e lead.
+model ProspectingListLead {
+  id     String  @id @default(cuid())
+  listId String
+  leadId String
+  note   String?
+
+  createdAt DateTime @default(now())
+
+  list ProspectingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  lead Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, leadId])
+  @@index([leadId])
+}
+
+/// Analise de oportunidade gerada por IA, sob demanda.
+/// Guardada com o hash da entrada: se os dados do lead nao mudaram, a analise
+/// e reaproveitada e nenhum token e gasto de novo.
+model LeadAiAnalysis {
+  id     String @id @default(cuid())
+  leadId String @unique
+
+  /// Modelo usado, para saber o que reprocessar quando trocar.
+  model     String
+  /// Hash dos dados enviados ao modelo.
+  inputHash String
+
+  summary       String
+  problems      String[] @default([])
+  opportunities String[] @default([])
+  services      String[] @default([])
+  approach      String
+
+  inputTokens       Int    @default(0)
+  outputTokens      Int    @default(0)
+  cachedInputTokens Int    @default(0)
+  costUsd           Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}

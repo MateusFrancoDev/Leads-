@@ -32,6 +32,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# ferramentas de assistente (geradas localmente, nao fazem parte do projeto)
+/.agents
+/.claude
+/.windsurf
+/.cursor
+skills-lock.json
+AGENTS.md
+CLAUDE.md
 
 # vercel
 .vercel
@@ -39,3 +49,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+/generated
