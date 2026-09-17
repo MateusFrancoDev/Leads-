@@ -4,7 +4,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { userMessage } from "@/lib/errors";
+import { toAppError, userMessage } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import {
   toggleLeadFavorite,
@@ -135,30 +135,54 @@ export async function analyzeWebsiteAction(
   }
 }
 
-/** Análise de oportunidade por IA. Só roda quando o usuário pede. */
+const analyzeSchema = z.object({
+  leadId: z.string().min(1),
+  /** "Reanalisar" envia force=1; a primeira análise não envia nada. */
+  force: z.union([z.literal("1"), z.literal("true")]).optional(),
+});
+
+/**
+ * Análise de oportunidade por IA. Só roda quando o usuário pede - abrir a
+ * página do lead nunca dispara uma chamada ao modelo.
+ */
 export async function analyzeOpportunityAction(
   _previous: LeadActionState,
   formData: FormData,
 ): Promise<LeadActionState> {
-  const parsed = leadIdSchema.safeParse({ leadId: formData.get("leadId") });
+  const parsed = analyzeSchema.safeParse({
+    leadId: formData.get("leadId"),
+    force: formData.get("force") ?? undefined,
+  });
   if (!parsed.success) return { status: "error", message: "Lead inválido." };
 
   try {
-    const outcome = await analyzeLeadOpportunity(parsed.data.leadId);
+    const outcome = await analyzeLeadOpportunity(parsed.data.leadId, {
+      force: Boolean(parsed.data.force),
+    });
     revalidatePath(`/leads/${parsed.data.leadId}`);
+    revalidatePath("/leads");
 
-    return {
-      status: "success",
-      message:
-        outcome.status === "analyzed"
-          ? "Análise gerada."
-          : "Os dados não mudaram desde a última análise - nenhum token foi gasto.",
-    };
+    if (outcome.status === "analyzed") {
+      return { status: "success", message: `Análise gerada. Score ${outcome.analysis.score}.` };
+    }
+    if (outcome.reason === "current") {
+      return {
+        status: "success",
+        message: "Os dados não mudaram desde a última análise - nenhum token foi gasto.",
+      };
+    }
+    return { status: "error", message: outcome.message };
   } catch (error) {
-    logger.error("falha ao analisar oportunidade");
+    logger.error("falha ao analisar oportunidade", { code: toAppError(error).code });
     return { status: "error", message: userMessage(error) };
   }
 }
+
+/**
+ * A análise em lote não mora aqui: ela precisa devolver progresso enquanto
+ * roda, e uma Server Action só responde no fim. Ela vive em
+ * `POST /api/leads/analyze`, que devolve um resultado por linha.
+ */
 
 const notesSchema = z.object({
   leadId: z.string().min(1),

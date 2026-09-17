@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Panel } from "@/components/ui/feedback";
+import { AiScoreBadge, WebsiteQualityBadge } from "@/features/leads/lead-badges";
+import { formatRelativeTime } from "@/lib/format-time";
 import type { StoredAiAnalysis } from "@/types/ai";
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -32,16 +34,27 @@ export function AiAnalysisPanel({ analysis }: { analysis: StoredAiAnalysis }) {
 
   return (
     <Panel className="flex flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="text-sm text-ink">{analysis.summary}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <AiScoreBadge score={analysis.score} opportunity={analysis.opportunity} />
+        <WebsiteQualityBadge quality={analysis.websiteQuality} />
+        <Badge tone={analysis.hasWebsite ? "accent" : "neutral"}>
+          {analysis.hasWebsite ? "Com site" : "Sem site conhecido"}
+        </Badge>
         {analysis.isCurrent ? null : (
           <Badge tone="warning">Dados mudaram depois desta análise</Badge>
         )}
       </div>
 
+      {/* Por que a nota é essa - o score nunca aparece sem explicação. */}
+      {analysis.scoreReason ? (
+        <p className="border-l-2 border-line pl-3 text-sm text-ink-muted">{analysis.scoreReason}</p>
+      ) : null}
+
+      <p className="text-sm text-ink">{analysis.summary}</p>
+
       <List title="Problemas encontrados" items={analysis.problems} />
       <List title="Oportunidades" items={analysis.opportunities} />
-      <List title="Serviços que podemos oferecer" items={analysis.services} />
+      <List title="Serviços recomendados" items={analysis.services} />
 
       <div className="border-t border-line pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -52,7 +65,10 @@ export function AiAnalysisPanel({ analysis }: { analysis: StoredAiAnalysis }) {
       </div>
 
       <p className="text-xs text-ink-subtle">
-        {dateFormatter.format(analysis.createdAt)} · {analysis.model}
+        Analisado {formatRelativeTime(analysis.createdAt)} ({dateFormatter.format(analysis.createdAt)})
+        {" · "}
+        {analysis.model}
+        {analysis.confidence > 0 ? ` · confiança ${Math.round(analysis.confidence * 100)}%` : ""}
         {tokens > 0 ? ` · ${tokens} tokens` : ""}
         {analysis.costUsd !== null && analysis.costUsd > 0
           ? ` · ~US$ ${analysis.costUsd.toFixed(4)}`

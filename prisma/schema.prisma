@@ -54,10 +54,21 @@ enum LeadStatus {
 }
 
 /// Faixa do lead score (derivada de score, ver lib/config/lead-score.ts).
+/// Reaproveitada pela IA para classificar a oportunidade (alta/média/baixa).
 enum ScoreLevel {
   LOW
   MEDIUM
   HIGH
+}
+
+/// Qualidade aparente do site. UNKNOWN é o padrão e continua sendo o valor
+/// gravado sempre que o site não foi realmente baixado e analisado: a IA não
+/// pode opinar sobre um site que ninguém abriu.
+enum WebsiteQuality {
+  GOOD
+  AVERAGE
+  POOR
+  UNKNOWN
 }
 
 /// Tipo de evento registrado no histórico do lead.
@@ -391,10 +402,24 @@ model LeadAiAnalysis {
   id     String @id @default(cuid())
   leadId String @unique
 
+  /// Provider que respondeu ("gemini", "anthropic", "mock").
+  provider  String @default("")
   /// Modelo usado, para saber o que reprocessar quando trocar.
   model     String
   /// Hash dos dados enviados ao modelo.
   inputHash String
+
+  /// Nota de oportunidade de 0 a 100 atribuída pela IA (independente do lead score
+  /// de regras fixas, que continua em Lead.score).
+  score       Int            @default(0)
+  /// Faixa da nota. Sempre coerente com `score`: normalizada no servidor.
+  opportunity ScoreLevel     @default(LOW)
+  /// Frase curta que justifica a nota.
+  scoreReason String         @default("")
+  /// Só é diferente de UNKNOWN quando existe LeadWebsiteAnalysis para o lead.
+  websiteQuality WebsiteQuality @default(UNKNOWN)
+  /// Confiança declarada pelo modelo, de 0 a 1.
+  confidence  Float          @default(0)
 
   summary       String
   problems      String[] @default([])
@@ -413,4 +438,5 @@ model LeadAiAnalysis {
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
+  @@index([score])
 }

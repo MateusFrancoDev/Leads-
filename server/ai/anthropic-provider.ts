@@ -12,36 +12,17 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { z } from "zod";
 import { AppError } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import { estimateCostUsd, serverConfig } from "@/server/config";
+import {
+  SYSTEM_PROMPT,
+  parseAnalysis,
+  structuredOutputSchema,
+} from "@/server/ai/analysis-contract";
 import type { AiAnalysisResponse, AiLeadInput, AiProvider } from "@/types/ai";
 
 const logger = createLogger("ai-anthropic");
-
-const analysisSchema = z.object({
-  summary: z.string().describe("Resumo em uma frase da oportunidade comercial"),
-  problems: z.array(z.string()).describe("Problemas concretos identificados"),
-  opportunities: z.array(z.string()).describe("Oportunidades de melhoria para a empresa"),
-  services: z.array(z.string()).describe("Serviços que poderiamos oferecer a ela"),
-  approach: z.string().describe("Sugestão de abordagem comercial, em 2 a 3 frases"),
-});
-
-const SYSTEM_PROMPT = [
-  "Você analisa empresas para uma agência que vende presença digital",
-  "(sites, landing pages, SEO local, tráfego pago e automação de atendimento).",
-  "",
-  "Recebe um JSON com os dados publicos de uma empresa e responde em português",
-  "do Brasil, de forma objetiva e verificável.",
-  "",
-  "Regras:",
-  "- baseie-se apenas nos dados recebidos; não invente fatos, números ou nomes;",
-  "- quando um dado estiver ausente, trate como desconhecido, não como problema;",
-  "- de 2 a 5 itens por lista, cada um em uma frase curta;",
-  "- a abordagem comercial deve citar algo específico da empresa;",
-  "- nada de promessas de resultado nem linguagem de venda agressiva.",
-].join("\n");
 
 export class AnthropicAiProvider implements AiProvider {
   readonly name = "anthropic";
@@ -53,7 +34,7 @@ export class AnthropicAiProvider implements AiProvider {
   }
 
   isConfigured(): boolean {
-    return this.client !== null;
+    return this.client !== null && serverConfig.ai.model.length > 0;
   }
 
   async analyzeOpportunity(input: AiLeadInput): Promise<AiAnalysisResponse> {
@@ -68,10 +49,11 @@ export class AnthropicAiProvider implements AiProvider {
         // própria chamada e reexecutada em um modelo alternativo.
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
+        temperature: serverConfig.ai.temperature,
         system: SYSTEM_PROMPT,
         output_config: {
           effort: serverConfig.ai.effort,
-          format: zodOutputFormat(analysisSchema),
+          format: zodOutputFormat(structuredOutputSchema),
         },
         messages: [{ role: "user", content: JSON.stringify(input) }],
       });
@@ -81,10 +63,11 @@ export class AnthropicAiProvider implements AiProvider {
         throw new AppError("PROVIDER_ERROR", "O modelo não pode analisar esta empresa.");
       }
 
-      const analysis = response.parsed_output;
-      if (!analysis) {
+      if (!response.parsed_output) {
         throw new AppError("PROVIDER_ERROR", "A resposta da IA veio em formato inesperado.");
       }
+      // Nunca confiamos no JSON do modelo: Zod valida e apara antes de gravar.
+      const analysis = parseAnalysis(response.parsed_output);
 
       const inputTokens = response.usage.input_tokens;
       const outputTokens = response.usage.output_tokens;

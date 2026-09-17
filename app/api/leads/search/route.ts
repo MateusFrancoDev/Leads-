@@ -7,26 +7,12 @@
  */
 
 import { after } from "next/server";
-import { isAppError, userMessage, type AppErrorCode } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import { leadSearchRequestSchema } from "@/lib/validation";
+import { appErrorResponse, errorCode, errorResponse } from "@/server/api/errors";
 import { searchLeads } from "@/server/services/lead-search-service";
 
 const logger = createLogger("api-lead-search");
-
-const STATUS_BY_CODE: Partial<Record<AppErrorCode, number>> = {
-  INVALID_INPUT: 400,
-  NOT_FOUND: 404,
-  PROVIDER_NOT_CONFIGURED: 503,
-  PROVIDER_RATE_LIMITED: 429,
-  PROVIDER_UNAVAILABLE: 503,
-  PROVIDER_ERROR: 502,
-  NETWORK_ERROR: 502,
-};
-
-function errorResponse(status: number, code: string, message: string, details?: unknown) {
-  return Response.json({ error: { code, message, ...(details ? { details } : {}) } }, { status });
-}
 
 export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
@@ -64,8 +50,7 @@ export async function POST(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    const code: AppErrorCode = isAppError(error) ? error.code : "UNKNOWN";
-    logger.error("falha na busca", { code });
-    return errorResponse(STATUS_BY_CODE[code] ?? 500, code, userMessage(error));
+    logger.error("falha na busca", { code: errorCode(error) });
+    return appErrorResponse(error);
   }
 }

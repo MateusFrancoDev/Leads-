@@ -220,7 +220,7 @@ export default async function SettingsPage() {
 
       <Section
         title="Inteligência artificial"
-        description="Análise de oportunidade sob demanda. Desligada não aparece na tela do lead."
+        description="Analisa e classifica os leads já encontrados, sob demanda. Não encontra empresas nem preenche dados de contato - isso é o LEAD_PROVIDER, acima."
       >
         <Row label="Provider" value={config.ai.provider} hint="AI_PROVIDER" />
         <Row
@@ -232,17 +232,38 @@ export default async function SettingsPage() {
               <StatusBadge
                 ok={config.ai.configured}
                 okLabel="Pronta para analisar"
-                offLabel="Falta ANTHROPIC_API_KEY"
+                offLabel={
+                  config.ai.provider === "gemini"
+                    ? "Falta GEMINI_API_KEY"
+                    : "Falta ANTHROPIC_API_KEY"
+                }
               />
             )
           }
         />
         <Row label="Modelo" value={config.ai.model} hint="AI_MODEL" />
         <Row
-          label="Nível de esforço"
-          value={config.ai.effort}
-          hint="AI_EFFORT - menor gasta menos tokens"
+          label="Teto de tokens por resposta"
+          value={config.ai.maxOutputTokens}
+          hint="AI_MAX_OUTPUT_TOKENS"
         />
+        <Row
+          label="Validade da análise"
+          value={`${config.ai.analysisTtlHours} h`}
+          hint="AI_ANALYSIS_TTL_HOURS - análise dentro do prazo é reaproveitada sem gastar token"
+        />
+        <Row
+          label="Análises simultâneas no lote"
+          value={config.ai.concurrency}
+          hint="AI_CONCURRENCY"
+        />
+        {config.ai.provider === "anthropic" ? (
+          <Row
+            label="Nível de esforço"
+            value={config.ai.effort}
+            hint="AI_EFFORT - menor gasta menos tokens"
+          />
+        ) : null}
       </Section>
 
       <Section

@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { AtSign, ExternalLink, Globe, MapPin, MessageCircle } from "lucide-react";
 import { CopyButton } from "@/components/ui/copy-button";
-import { ScoreBadge, SourceBadge, WebsiteBadge, WhatsappBadge } from "@/features/leads/lead-badges";
+import {
+  AiScoreBadge,
+  ScoreBadge,
+  SourceBadge,
+  WebsiteBadge,
+  WhatsappBadge,
+} from "@/features/leads/lead-badges";
 import { LeadStatusCell } from "@/features/leads/lead-status-cell";
+import { formatRelativeTime } from "@/lib/format-time";
 import { leadWhatsappHref } from "@/lib/leads/contact-links";
 import { buildLocationUrl } from "@/lib/leads/location";
 import { extractDomain, extractSocialHandle, formatPhone } from "@/lib/normalize";
@@ -24,6 +31,25 @@ function Location({ lead }: { lead: LeadListItem }) {
 }
 
 /**
+ * Score da IA e situação da análise. Enquanto ninguém pediu a análise, a
+ * célula diz isso claramente: nada é analisado só por abrir a página.
+ */
+function AiCell({ lead }: { lead: LeadListItem }) {
+  const ai = lead.aiAnalysis;
+  if (!ai) {
+    return <span className="text-xs text-ink-subtle">Não analisado</span>;
+  }
+  return (
+    <span className="flex flex-col gap-1">
+      <AiScoreBadge score={ai.score} opportunity={ai.opportunity} />
+      <span className="text-xs text-ink-subtle">
+        Analisado {formatRelativeTime(ai.createdAt)}
+      </span>
+    </span>
+  );
+}
+
+/**
  * Tabela de resultados. Server Component - o JavaScript enviado ao navegador
  * se resume à célula de status e aos botões de copiar.
  *
@@ -39,7 +65,7 @@ export function LeadsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-336 border-collapse text-sm">
+      <table className="w-full min-w-368 border-collapse text-sm">
         <thead className="border-b border-line bg-surface-muted">
           <tr>
             {selectable ? (
@@ -56,6 +82,7 @@ export function LeadsTable({
             <th scope="col" className={HEAD_CLASSES}>Instagram</th>
             <th scope="col" className={HEAD_CLASSES}>E-mail</th>
             <th scope="col" className={HEAD_CLASSES}>Score</th>
+            <th scope="col" className={HEAD_CLASSES}>Score IA</th>
             <th scope="col" className={HEAD_CLASSES}>Fonte</th>
             <th scope="col" className={HEAD_CLASSES}>Status</th>
             <th scope="col" className={`${HEAD_CLASSES} text-right`}>Ações</th>
@@ -145,6 +172,9 @@ export function LeadsTable({
                 </td>
                 <td className={CELL_CLASSES}>
                   <ScoreBadge score={lead.score} level={lead.scoreLevel} />
+                </td>
+                <td className={CELL_CLASSES}>
+                  <AiCell lead={lead} />
                 </td>
                 <td className={CELL_CLASSES}>
                   <SourceBadge provider={lead.provider} />

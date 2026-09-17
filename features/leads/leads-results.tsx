@@ -3,11 +3,14 @@ import type { ReactNode } from "react";
 import { Download } from "lucide-react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { EmptyState, ErrorNotice, Panel } from "@/components/ui/feedback";
+import { AiBatchBar } from "@/features/leads/ai-batch-bar";
 import { LeadsTable } from "@/features/leads/leads-table";
 import { APP_CONFIG } from "@/lib/config/app-config";
 import { userMessage } from "@/lib/errors";
 import { buildLeadFiltersQuery, type LeadFilters } from "@/lib/validation";
+import { isAiEnabled } from "@/server/ai";
 import { findLeads, type LeadPage } from "@/server/repositories/lead-repository";
+import { MAX_BATCH_SIZE } from "@/server/services/lead-ai-service";
 
 type LoadResult = { ok: true; page: LeadPage } | { ok: false; message: string };
 
@@ -58,6 +61,9 @@ export async function LeadsResults({
   const result = await loadLeads(filters);
   if (!result.ok) return <ErrorNotice message={result.message} />;
 
+  // Sem provider de IA configurado, a barra de lote simplesmente não aparece.
+  const aiEnabled = isAiEnabled();
+
   const { items, total, hasMore } = result.page;
 
   if (items.length === 0) {
@@ -95,10 +101,14 @@ export async function LeadsResults({
         </Panel>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button type="submit" size="sm">
-            <Download className="size-3.5" aria-hidden />
-            Exportar selecionados
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="submit" size="sm">
+              <Download className="size-3.5" aria-hidden />
+              Exportar selecionados
+            </Button>
+            {/* Mesma seleção da exportação: marcar uma vez serve para as duas ações. */}
+            {aiEnabled ? <AiBatchBar maxBatchSize={MAX_BATCH_SIZE} /> : null}
+          </div>
           <span className="text-xs text-ink-subtle">
             Sem nenhum marcado, exporta todos os leads filtrados.
           </span>

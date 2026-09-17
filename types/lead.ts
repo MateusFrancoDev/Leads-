@@ -10,11 +10,12 @@ import {
   EnrichmentStatus,
   LeadStatus,
   ScoreLevel,
+  WebsiteQuality,
   WebsiteStatus,
   WhatsappStatus,
 } from "@/generated/prisma/enums";
 
-export { EnrichmentStatus, LeadStatus, ScoreLevel, WebsiteStatus, WhatsappStatus };
+export { EnrichmentStatus, LeadStatus, ScoreLevel, WebsiteQuality, WebsiteStatus, WhatsappStatus };
 
 export type Tone = "positive" | "negative" | "warning" | "neutral";
 
@@ -125,12 +126,47 @@ export const SCORE_LEVEL_LABELS: Record<ScoreLevel, string> = {
   LOW: "Baixa",
 };
 
+/** Faixa de oportunidade da análise por IA (mesma escala do lead score). */
+export const OPPORTUNITY_LABELS: Record<ScoreLevel, string> = {
+  HIGH: "Alta oportunidade",
+  MEDIUM: "Média oportunidade",
+  LOW: "Baixa oportunidade",
+};
+
+/**
+ * Qualidade aparente do site. "Não verificada" é o valor honesto enquanto
+ * ninguém tiver baixado o site - a IA não opina sobre página que não foi lida.
+ */
+export const WEBSITE_QUALITY_LABELS: Record<WebsiteQuality, string> = {
+  GOOD: "Boa",
+  AVERAGE: "Mediana",
+  POOR: "Ruim",
+  UNKNOWN: "Não verificada",
+};
+
+export const WEBSITE_QUALITY_TONE: Record<WebsiteQuality, Tone> = {
+  GOOD: "positive",
+  AVERAGE: "warning",
+  POOR: "negative",
+  UNKNOWN: "neutral",
+};
+
 /** Situações em que nenhum site próprio é conhecido (sem afirmar que não existe). */
 export const WEBSITE_STATUSES_WITHOUT_KNOWN_SITE: readonly WebsiteStatus[] = [
   WebsiteStatus.NOT_PROVIDED,
   WebsiteStatus.NO_WEBSITE,
   WebsiteStatus.SOCIAL_ONLY,
 ];
+
+/**
+ * Resumo da análise por IA exibido na tabela. A análise completa vive em
+ * types/ai.ts e só é carregada na página de detalhes.
+ */
+export interface LeadAiSummary {
+  score: number;
+  opportunity: ScoreLevel;
+  createdAt: Date;
+}
 
 /** Colunas carregadas na tabela de leads. Mantém o select do Prisma enxuto. */
 export interface LeadListItem {
@@ -154,11 +190,16 @@ export interface LeadListItem {
   scoreLevel: ScoreLevel;
   status: LeadStatus;
   isFavorite: boolean;
+  /** Resumo da análise por IA. null = lead nunca analisado. */
+  aiAnalysis: LeadAiSummary | null;
 }
 
 /** Tudo que a página de detalhes mostra. */
 export interface LeadDetail extends LeadListItem {
   externalId: string | null;
+  /** Legado do Google Places: as fontes atuais não trazem avaliação. */
+  rating: number | null;
+  reviewsCount: number | null;
   facebook: string | null;
   linkedin: string | null;
   address: string | null;

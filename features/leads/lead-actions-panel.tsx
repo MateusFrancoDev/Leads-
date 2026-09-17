@@ -136,6 +136,10 @@ export interface LeadActionsPanelProps {
   status: LeadStatus;
   isFavorite: boolean;
   aiEnabled: boolean;
+  /** Já existe análise gravada? Define "Analisar" x "Reanalisar". */
+  hasAiAnalysis: boolean;
+  /** "há 3 dias", já formatado no servidor. */
+  analyzedAgo?: string;
 }
 
 export function LeadActionsPanel({
@@ -149,6 +153,8 @@ export function LeadActionsPanel({
   status,
   isFavorite,
   aiEnabled,
+  hasAiAnalysis,
+  analyzedAgo,
 }: LeadActionsPanelProps) {
   const hasWebsite = Boolean(website);
 
@@ -234,10 +240,18 @@ export function LeadActionsPanel({
           <ActionForm
             action={analyzeOpportunityAction}
             leadId={leadId}
-            label="Analisar oportunidade"
+            label={hasAiAnalysis ? "Reanalisar com IA" : "Analisar com IA"}
             pendingLabel="Analisando..."
             icon={<Brain className="size-3.5" aria-hidden />}
-            hint="Usa IA. Se nada mudou desde a última análise, não gasta token."
+            // Reanalisar é pedido explícito de gastar: só aí ignoramos o cache.
+            extraFields={hasAiAnalysis ? { force: "1" } : undefined}
+            hint={
+              hasAiAnalysis
+                ? analyzedAgo
+                  ? `Analisado ${analyzedAgo}. Reanalisar gera uma análise nova e gasta tokens.`
+                  : "Reanalisar gera uma análise nova e gasta tokens."
+                : "Classifica a oportunidade a partir dos dados já coletados. Não inventa dados."
+            }
           />
         ) : null}
       </div>

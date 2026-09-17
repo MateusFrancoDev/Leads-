@@ -17,6 +17,7 @@ import {
 } from "@/features/leads/lead-badges";
 import { WebsiteAnalysisPanel } from "@/features/leads/website-analysis-panel";
 import { LeadListsPanel } from "@/features/lists/lead-lists-panel";
+import { formatRelativeTime } from "@/lib/format-time";
 import { leadWhatsappHref } from "@/lib/leads/contact-links";
 import { buildLocationUrl } from "@/lib/leads/location";
 import { buildSourceRecordUrl } from "@/lib/leads/source-links";
@@ -272,10 +273,20 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
         <div className="flex min-w-0 flex-col gap-6">
           <ContactPanel lead={lead} />
 
-          {aiAnalysis ? (
+          {/* Nunca dispara análise ao abrir a página: sem análise, só o convite. */}
+          {aiAnalysis || aiEnabled ? (
             <section className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium text-ink">Análise de oportunidade</h2>
-              <AiAnalysisPanel analysis={aiAnalysis} />
+              <h2 className="text-sm font-medium text-ink">Análise por IA</h2>
+              {aiAnalysis ? (
+                <AiAnalysisPanel analysis={aiAnalysis} />
+              ) : (
+                <Panel className="p-4">
+                  <p className="text-sm text-ink-muted">
+                    Este lead ainda não foi analisado. Use &quot;Analisar com IA&quot; nas ações ao
+                    lado para classificar a oportunidade a partir dos dados já coletados.
+                  </p>
+                </Panel>
+              )}
             </section>
           ) : null}
 
@@ -309,6 +320,8 @@ export default async function LeadDetailPage({ params }: PageProps<"/leads/[id]"
                 status={lead.status}
                 isFavorite={lead.isFavorite}
                 aiEnabled={aiEnabled}
+                hasAiAnalysis={aiAnalysis !== null}
+                analyzedAgo={aiAnalysis ? formatRelativeTime(aiAnalysis.createdAt) : undefined}
               />
             </Panel>
           </section>

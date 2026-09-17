@@ -28,6 +28,7 @@ import {
   ScoreLevel,
   WEBSITE_STATUSES_WITHOUT_KNOWN_SITE,
   WhatsappStatus,
+  type WebsiteQuality,
   type EnrichmentStatus,
   type LeadDetail,
   type LeadListItem,
@@ -64,11 +65,18 @@ const LIST_SELECT = {
   scoreLevel: true,
   status: true,
   isFavorite: true,
+  /**
+   * Resumo da análise por IA na própria consulta da tabela: relação 1-1, sem
+   * consulta extra. Vem null quando o lead nunca foi analisado.
+   */
+  aiAnalysis: { select: { score: true, opportunity: true, createdAt: true } },
 } satisfies Prisma.LeadSelect;
 
 const DETAIL_SELECT = {
   ...LIST_SELECT,
   externalId: true,
+  rating: true,
+  reviewsCount: true,
   facebook: true,
   linkedin: true,
   address: true,
@@ -764,8 +772,14 @@ export async function findLeadsForExport(
 // ----------------------------------------------------------- Fase 3 (IA/CRM)
 
 export interface AiAnalysisRecord {
+  provider: string;
   model: string;
   inputHash: string;
+  score: number;
+  opportunity: ScoreLevel;
+  scoreReason: string;
+  websiteQuality: WebsiteQuality;
+  confidence: number;
   summary: string;
   problems: string[];
   opportunities: string[];
@@ -781,24 +795,32 @@ export interface StoredAiAnalysisRow extends AiAnalysisRecord {
   createdAt: Date;
 }
 
+const AI_ANALYSIS_SELECT = {
+  provider: true,
+  model: true,
+  inputHash: true,
+  score: true,
+  opportunity: true,
+  scoreReason: true,
+  websiteQuality: true,
+  confidence: true,
+  summary: true,
+  problems: true,
+  opportunities: true,
+  services: true,
+  approach: true,
+  inputTokens: true,
+  outputTokens: true,
+  cachedInputTokens: true,
+  costUsd: true,
+  createdAt: true,
+} satisfies Prisma.LeadAiAnalysisSelect;
+
 export async function findAiAnalysis(leadId: string): Promise<StoredAiAnalysisRow | null> {
   try {
     return await prisma.leadAiAnalysis.findUnique({
       where: { leadId },
-      select: {
-        model: true,
-        inputHash: true,
-        summary: true,
-        problems: true,
-        opportunities: true,
-        services: true,
-        approach: true,
-        inputTokens: true,
-        outputTokens: true,
-        cachedInputTokens: true,
-        costUsd: true,
-        createdAt: true,
-      },
+      select: AI_ANALYSIS_SELECT,
     });
   } catch (error) {
     throw new AppError("DATABASE_ERROR", undefined, error);

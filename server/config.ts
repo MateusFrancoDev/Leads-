@@ -20,17 +20,35 @@ const envBoolean = (fallback: boolean) =>
 
 const httpUrl = z.url({ protocol: /^https?$/ });
 
-export const AI_PROVIDER_NAMES = ["anthropic", "mock", "none"] as const;
+/**
+ * Quem ANALISA os leads. Não confundir com a fonte que os ENCONTRA
+ * (LEAD_PROVIDER / OPENSTREETMAP_ENABLED / CNPJ_ENABLED, logo acima).
+ */
+export const AI_PROVIDER_NAMES = ["gemini", "anthropic", "mock", "none"] as const;
 export type AiProviderName = (typeof AI_PROVIDER_NAMES)[number];
 
 export const AI_EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"] as const;
 export type AiEffort = (typeof AI_EFFORT_LEVELS)[number];
 
 /**
+ * Modelo usado quando AI_MODEL não é informado. Só existe um lugar com nome de
+ * modelo no projeto: trocar aqui (ou no .env) troca em toda a aplicação.
+ */
+const DEFAULT_MODEL: Record<AiProviderName, string> = {
+  gemini: "gemini-2.5-flash",
+  anthropic: "claude-haiku-4-5",
+  mock: "mock",
+  none: "",
+};
+
+/**
  * Preço por milhão de tokens, usado apenas para estimar custo na interface.
  * Modelo fora desta tabela simplesmente não exibe estimativa.
  */
 const MODEL_PRICING: Readonly<Record<string, { input: number; output: number }>> = {
+  "gemini-2.5-flash": { input: 0.3, output: 2.5 },
+  "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
+  "gemini-2.5-pro": { input: 1.25, output: 10 },
   "claude-opus-5": { input: 5, output: 25 },
   "claude-sonnet-5": { input: 2, output: 10 },
   "claude-haiku-4-5": { input: 1, output: 5 },
@@ -72,10 +90,18 @@ const envSchema = z.object({
   WEBSITE_ANALYSIS_TTL_HOURS: z.coerce.number().positive().default(24 * 7),
   MAX_EXPORT_ROWS: z.coerce.number().int().min(1).max(10_000).default(2_000),
   AI_PROVIDER: z.enum(AI_PROVIDER_NAMES).default("none"),
+  GEMINI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
-  AI_MODEL: z.string().default("claude-opus-5"),
+  AI_MODEL: z.string().min(1).optional(),
   AI_EFFORT: z.enum(AI_EFFORT_LEVELS).default("low"),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(256).max(16_000).default(2_000),
+  // Um lead analisado há menos tempo que isto não volta ao modelo sozinho.
+  AI_ANALYSIS_TTL_HOURS: z.coerce.number().positive().default(24 * 30),
+  AI_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(5_000).max(120_000).default(30_000),
+  AI_TEMPERATURE: z.coerce.number().min(0).max(1).default(0.2),
+  // Gemini 2.5 cobra o "raciocínio" como saída. 0 desliga e é o padrão aqui.
+  AI_THINKING_BUDGET: z.coerce.number().int().min(0).max(24_576).default(0),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
 });
 
@@ -106,10 +132,16 @@ function readEnv() {
     WEBSITE_ANALYSIS_TTL_HOURS: process.env.WEBSITE_ANALYSIS_TTL_HOURS || undefined,
     MAX_EXPORT_ROWS: process.env.MAX_EXPORT_ROWS || undefined,
     AI_PROVIDER: process.env.AI_PROVIDER || undefined,
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || undefined,
-    AI_MODEL: process.env.AI_MODEL || undefined,
+    GEMINI_API_KEY: env("GEMINI_API_KEY"),
+    ANTHROPIC_API_KEY: env("ANTHROPIC_API_KEY"),
+    AI_MODEL: env("AI_MODEL"),
     AI_EFFORT: process.env.AI_EFFORT || undefined,
     AI_MAX_OUTPUT_TOKENS: process.env.AI_MAX_OUTPUT_TOKENS || undefined,
+    AI_ANALYSIS_TTL_HOURS: process.env.AI_ANALYSIS_TTL_HOURS || undefined,
+    AI_CONCURRENCY: process.env.AI_CONCURRENCY || undefined,
+    AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS || undefined,
+    AI_TEMPERATURE: process.env.AI_TEMPERATURE || undefined,
+    AI_THINKING_BUDGET: process.env.AI_THINKING_BUDGET || undefined,
     DB_POOL_MAX: process.env.DB_POOL_MAX || undefined,
   });
 
@@ -175,13 +207,27 @@ export const serverConfig = {
   /** Teto de linhas por exportação CSV. */
   maxExportRows: env.MAX_EXPORT_ROWS,
 
+  /**
+   * IA de ANÁLISE. Só classifica e explica leads que outra fonte já encontrou -
+   * nunca inventa empresa, contato ou endereço.
+   */
   ai: {
     provider: env.AI_PROVIDER,
-    apiKey: env.ANTHROPIC_API_KEY ?? "",
-    model: env.AI_MODEL,
+    /** Chave do provider ativo. Fica só no servidor; nenhuma rota devolve isto. */
+    apiKey:
+      (env.AI_PROVIDER === "gemini" ? env.GEMINI_API_KEY : env.ANTHROPIC_API_KEY)?.trim() ?? "",
+    model: env.AI_MODEL ?? DEFAULT_MODEL[env.AI_PROVIDER],
     /** Nível de esforço: menor = mais barato. Análise de lead e tarefa simples. */
     effort: env.AI_EFFORT,
     maxOutputTokens: env.AI_MAX_OUTPUT_TOKENS,
+    /** Baixa de propósito: queremos classificação estável, não criatividade. */
+    temperature: env.AI_TEMPERATURE,
+    thinkingBudget: env.AI_THINKING_BUDGET,
+    timeoutMs: env.AI_TIMEOUT_MS,
+    /** Teto de análises simultâneas no lote. */
+    concurrency: env.AI_CONCURRENCY,
+    /** Análise mais nova que isto é reaproveitada sem chamar o modelo. */
+    analysisTtlMs: env.AI_ANALYSIS_TTL_HOURS * 60 * 60 * 1000,
   },
 
   external: {
@@ -190,6 +236,14 @@ export const serverConfig = {
     retry: { retries: 2, baseDelayMs: 400 },
   },
 } as const;
+
+/** O provider de IA ativo tem tudo que precisa para rodar? */
+export function isAiConfigured(): boolean {
+  const { provider, apiKey, model } = serverConfig.ai;
+  if (provider === "none") return false;
+  if (provider === "mock") return true;
+  return apiKey.length > 0 && model.length > 0;
+}
 
 /**
  * Retrato da configuração para a tela de Configurações.
@@ -217,7 +271,15 @@ export interface ConfigSummary {
     maxResponseBytes: number;
     maxSitesPerSearch: number;
   };
-  ai: { provider: AiProviderName; configured: boolean; model: string; effort: AiEffort };
+  ai: {
+    provider: AiProviderName;
+    configured: boolean;
+    model: string;
+    effort: AiEffort;
+    concurrency: number;
+    analysisTtlHours: number;
+    maxOutputTokens: number;
+  };
   limits: {
     searchCacheHours: number;
     enrichmentTtlHours: number;
@@ -255,11 +317,13 @@ export function describeConfig(): ConfigSummary {
     crawler: { ...serverConfig.crawler },
     ai: {
       provider: serverConfig.ai.provider,
-      configured:
-        serverConfig.ai.provider === "mock" ||
-        (serverConfig.ai.provider === "anthropic" && serverConfig.ai.apiKey.length > 0),
+      // Só diz se a chave existe - o valor nunca sai do servidor.
+      configured: isAiConfigured(),
       model: serverConfig.ai.model,
       effort: serverConfig.ai.effort,
+      concurrency: serverConfig.ai.concurrency,
+      analysisTtlHours: hours(serverConfig.ai.analysisTtlMs),
+      maxOutputTokens: serverConfig.ai.maxOutputTokens,
     },
     limits: {
       searchCacheHours: hours(serverConfig.searchCacheTtlMs),
