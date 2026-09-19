@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { deleteListAction, initialListActionState } from "@/server/actions/list-actions";
+import { deleteListAction } from "@/server/actions/list-actions";
+import { initialListActionState } from "@/server/actions/leads-action-state";
 
 /** Exclui a lista. Os leads continuam na base - só o agrupamento some. */
 export function DeleteListButton({ listId, listName }: { listId: string; listName: string }) {

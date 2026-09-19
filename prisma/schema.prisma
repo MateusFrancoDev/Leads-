@@ -440,3 +440,510 @@ model LeadAiAnalysis {
   @@index([createdAt])
   @@index([score])
 }
+
+// ============================================================================
+// SISTEMA INTERNO (CRM, projetos, financeiro, tarefas, arquivos)
+//
+// Valores monetários são gravados em CENTAVOS (Int). Inteiro não tem erro de
+// arredondamento como Float e não exige a biblioteca decimal.js do tipo Decimal.
+// Conversão e formatação ficam em lib/money.ts.
+// ============================================================================
+
+/// Papel do usuário. Hoje ADMIN e PARTNER veem tudo; EMPLOYEE já existe para
+/// quando entrarem funcionários com acesso só aos projetos atribuídos.
+enum UserRole {
+  ADMIN
+  PARTNER
+  EMPLOYEE
+}
+
+/// Estágio do cliente no relacionamento comercial.
+enum ClientStatus {
+  LEAD
+  NEGOTIATING
+  ACTIVE
+  COMPLETED
+  INACTIVE
+}
+
+/// Tipo de serviço vendido. Novos tipos entram como valor do enum + migration.
+enum ProjectType {
+  LANDING_PAGE
+  INSTITUTIONAL_SITE
+  ECOMMERCE
+  SAAS
+  APP
+  MAINTENANCE
+  CONSULTING
+  AUTOMATION
+  OTHER
+}
+
+/// Etapa do projeto. A ordem aqui é a ordem das colunas do Kanban.
+enum ProjectStatus {
+  QUOTE
+  AWAITING_APPROVAL
+  AWAITING_PAYMENT
+  PLANNING
+  DEVELOPMENT
+  REVIEW
+  AWAITING_CLIENT
+  COMPLETED
+  CANCELLED
+}
+
+/// Prioridade de projeto e de tarefa.
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// Coluna do Kanban de tarefas.
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+/// Situação de UM pagamento. "Atrasado" não é gravado: é derivado de
+/// dueDate no passado com status PENDING (ver lib/finance.ts), assim nenhum
+/// job precisa rodar para manter o banco correto.
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PIX
+  BANK_TRANSFER
+  CREDIT_CARD
+  DEBIT_CARD
+  BOLETO
+  CASH
+  OTHER
+}
+
+enum ExpenseCategory {
+  DOMAIN
+  HOSTING
+  API
+  DATABASE
+  DESIGNER
+  FREELANCER
+  LICENSE
+  SOFTWARE
+  TOOL
+  OTHER
+}
+
+/// Pasta lógica do arquivo dentro do projeto.
+enum FileCategory {
+  BRIEFING
+  CONTRACT
+  DESIGN
+  LOGO
+  CONTENT
+  DEVELOPMENT
+  FINANCE
+  DELIVERY
+  OTHER
+}
+
+enum ContractStatus {
+  NOT_SENT
+  SENT
+  SIGNED
+}
+
+/// O que aconteceu. Alimenta a timeline do projeto e o histórico geral.
+enum ActivityAction {
+  CREATED
+  UPDATED
+  DELETED
+  STATUS_CHANGED
+  PROGRESS_CHANGED
+  DEADLINE_CHANGED
+  PAYMENT_REGISTERED
+  PAYMENT_RECEIVED
+  EXPENSE_REGISTERED
+  FILE_ADDED
+  FILE_REMOVED
+  NOTE_ADDED
+  TASK_COMPLETED
+}
+
+/// Entidade sobre a qual a atividade fala.
+enum ActivityEntity {
+  CLIENT
+  PROJECT
+  TASK
+  PAYMENT
+  EXPENSE
+  NOTE
+  FILE
+  EVENT
+  USER
+}
+
+/// Tipo de compromisso criado à mão no calendário.
+enum EventType {
+  MEETING
+  DELIVERY
+  REMINDER
+  OTHER
+}
+
+/// Pessoa que usa o sistema. Não existe cadastro público: usuários são criados
+/// pelo comando `npm run user:create`.
+model User {
+  id String @id @default(cuid())
+
+  name  String
+  email String @unique
+
+  /// Hash scrypt gerado em lib/auth/password.ts. Nunca sai do servidor.
+  passwordHash String
+
+  /// Caminho do avatar dentro de storage/, quando houver.
+  avatarUrl String?
+  role      UserRole @default(PARTNER)
+
+  /// Usuário desligado não consegue entrar, mas o histórico dele continua.
+  isActive Boolean @default(true)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sessions       Session[]
+  assignedTasks  Task[]          @relation("TaskAssignee")
+  createdTasks   Task[]          @relation("TaskAuthor")
+  notes          Note[]
+  files          StoredFile[]
+  activities     Activity[]
+  calendarEvents CalendarEvent[]
+
+  @@index([email])
+}
+
+/// Sessão de login guardada no banco. O navegador só recebe o token; o banco
+/// guarda o SHA-256 dele, então ler o banco não permite entrar em nome de ninguém.
+model Session {
+  id     String @id @default(cuid())
+  userId String
+
+  /// SHA-256 (hex) do token que está no cookie.
+  tokenHash String @unique
+
+  /// Contexto do login, para conferir acessos na tela de configurações.
+  userAgent String?
+  ipAddress String?
+
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Cliente da empresa. Origem de todo projeto e de toda receita.
+model Client {
+  id String @id @default(cuid())
+
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  whatsapp  String?
+  instagram String?
+  website   String?
+  /// CPF ou CNPJ, só dígitos.
+  document  String?
+  city      String?
+  state     String?
+
+  status ClientStatus @default(LEAD)
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects       Project[]
+  clientNotes    Note[]
+  files          StoredFile[]
+  calendarEvents CalendarEvent[]
+
+  @@index([status])
+  @@index([name])
+  @@index([createdAt])
+}
+
+/// Trabalho vendido para um cliente. Centro do sistema: tarefas, pagamentos,
+/// custos, arquivos, anotações e timeline penduram aqui.
+model Project {
+  id       String @id @default(cuid())
+  clientId String
+
+  name        String
+  type        ProjectType @default(OTHER)
+  description String?
+
+  /// Valor cobrado do cliente, em centavos.
+  valueCents         Int @default(0)
+  /// Custo previsto, em centavos. O custo real vem da soma de Expense.
+  estimatedCostCents Int @default(0)
+
+  startDate DateTime?
+  deadline  DateTime?
+  /// Preenchido quando o status vira COMPLETED. Base dos relatórios por mês.
+  completedAt DateTime?
+
+  status   ProjectStatus @default(QUOTE)
+  priority Priority      @default(NORMAL)
+  /// 0 a 100. Vira 100 automaticamente ao concluir.
+  progress Int           @default(0)
+
+  technologies  String[] @default([])
+  projectUrl    String?
+  repositoryUrl String?
+  notes         String?
+
+  contractStatus ContractStatus @default(NOT_SENT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client         Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  briefing       Briefing?
+  tasks          Task[]
+  payments       Payment[]
+  expenses       Expense[]
+  projectNotes   Note[]
+  files          StoredFile[]
+  activities     Activity[]
+  calendarEvents CalendarEvent[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([deadline])
+  @@index([priority])
+  @@index([type])
+  @@index([createdAt])
+}
+
+/// Briefing do projeto. Um para um, criado sob demanda - nenhum campo é obrigatório.
+model Briefing {
+  id        String @id @default(cuid())
+  projectId String @unique
+
+  objective   String?
+  audience    String?
+  references  String?
+  colors      String?
+  style       String?
+  features    String?
+  competitors String?
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+/// Item de trabalho dentro de um projeto.
+model Task {
+  id             String  @id @default(cuid())
+  projectId      String
+  /// Quem vai fazer. Nulo = ainda sem responsável.
+  assignedUserId String?
+  /// Quem criou, para o histórico.
+  createdById    String?
+
+  title       String
+  description String?
+
+  priority Priority   @default(NORMAL)
+  status   TaskStatus @default(TODO)
+  deadline DateTime?
+  /// Momento em que a tarefa entrou em DONE.
+  completedAt DateTime?
+
+  /// Posição dentro da coluna do Kanban (menor primeiro).
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation("TaskAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  author   User?   @relation("TaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([assignedUserId, status])
+  @@index([deadline])
+  @@index([status, position])
+}
+
+/// Parcela a receber de um projeto. Um projeto pode ter várias
+/// (entrada + parcelas); os totais do projeto são a soma delas.
+model Payment {
+  id        String @id @default(cuid())
+  projectId String
+
+  description String?
+  /// Valor da parcela, em centavos.
+  amountCents Int
+  method      PaymentMethod @default(PIX)
+
+  dueDate DateTime?
+  paidAt  DateTime?
+  status  PaymentStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status, dueDate])
+  @@index([paidAt])
+}
+
+/// Gasto ligado a um projeto (domínio, hospedagem, freelancer...).
+model Expense {
+  id        String @id @default(cuid())
+  projectId String
+
+  description String
+  category    ExpenseCategory @default(OTHER)
+  /// Valor pago, em centavos.
+  amountCents Int
+  date        DateTime        @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([category])
+  @@index([date])
+}
+
+/// Anotação livre presa a um cliente e/ou a um projeto.
+model Note {
+  id        String  @id @default(cuid())
+  projectId String?
+  clientId  String?
+  userId    String?
+
+  content String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([clientId, createdAt])
+}
+
+/// Arquivo guardado pelo sistema. O binário fica em disco (pasta storage/, fora
+/// do versionamento); aqui ficam só os metadados e o caminho relativo.
+/// Chama-se StoredFile e não File para não colidir com o File do navegador.
+model StoredFile {
+  id        String  @id @default(cuid())
+  projectId String?
+  clientId  String?
+  userId    String?
+
+  /// Nome original, mostrado na interface.
+  name String
+  /// Caminho relativo dentro de storage/ (nunca exposto ao navegador).
+  path String
+  /// Content-Type declarado no upload.
+  mimeType  String
+  sizeBytes Int
+  category  FileCategory @default(OTHER)
+
+  createdAt DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([category])
+}
+
+/// Quem fez o quê. Gravada pelos services, nunca à mão pela interface.
+/// Alimenta a timeline do projeto e a página de histórico.
+model Activity {
+  id     String  @id @default(cuid())
+  userId String?
+  /// Preenchido quando a ação aconteceu dentro de um projeto, para a timeline.
+  projectId String?
+
+  entityType ActivityEntity
+  entityId   String
+  action     ActivityAction
+  /// Frase pronta, em português, com nome e valores já embutidos.
+  description String
+
+  createdAt DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// Compromisso criado à mão (reunião, entrega). Prazos de projeto, prazos de
+/// tarefa e vencimentos de pagamento NÃO viram registro aqui: o calendário os
+/// lê direto das tabelas de origem, para nunca ficarem dessincronizados.
+model CalendarEvent {
+  id        String  @id @default(cuid())
+  projectId String?
+  clientId  String?
+  userId    String?
+
+  title       String
+  description String?
+  type        EventType @default(MEETING)
+  startsAt    DateTime
+  /// Compromisso de dia inteiro ignora a hora de startsAt.
+  allDay Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  client  Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([startsAt])
+  @@index([projectId])
+}
+
+/// Dados da própria empresa. Linha única (id fixo "app"): não é multiempresa.
+model AppSettings {
+  id String @id @default("app")
+
+  companyName String  @default("Lummit")
+  logoUrl     String?
+
+  updatedAt DateTime @updatedAt
+}

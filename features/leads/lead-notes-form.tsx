@@ -5,7 +5,8 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
-import { initialLeadActionState, saveLeadNotesAction } from "@/server/actions/lead-actions";
+import { saveLeadNotesAction } from "@/server/actions/lead-actions";
+import { initialLeadActionState } from "@/server/actions/leads-action-state";
 
 export function LeadNotesForm({ leadId, notes }: { leadId: string; notes: string | null }) {
   const [state, formAction, pending] = useActionState(saveLeadNotesAction, initialLeadActionState);

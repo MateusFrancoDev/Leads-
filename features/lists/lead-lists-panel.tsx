@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/form";
 import {
   addLeadToListAction,
-  initialListActionState,
   removeLeadFromListAction,
 } from "@/server/actions/list-actions";
+import { initialListActionState } from "@/server/actions/leads-action-state";
 
 export interface LeadListOption {
   id: string;
@@ -45,7 +45,7 @@ export function LeadListsPanel({
     return (
       <p className="text-sm text-ink-muted">
         Voce ainda nao tem listas.{" "}
-        <Link href="/listas" className="text-accent hover:underline">
+        <Link href="/leads/listas" className="text-accent hover:underline">
           Criar a primeira
         </Link>
         .

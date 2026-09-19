@@ -103,6 +103,10 @@ const envSchema = z.object({
   // Gemini 2.5 cobra o "raciocínio" como saída. 0 desliga e é o padrão aqui.
   AI_THINKING_BUDGET: z.coerce.number().int().min(0).max(24_576).default(0),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
+  LEADS_MODULE_ENABLED: envBoolean(false),
+  SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  STORAGE_DIR: z.string().min(1).default("storage"),
+  MAX_UPLOAD_MB: z.coerce.number().int().min(1).max(200).default(25),
 });
 
 function readEnv() {
@@ -143,6 +147,10 @@ function readEnv() {
     AI_TEMPERATURE: process.env.AI_TEMPERATURE || undefined,
     AI_THINKING_BUDGET: process.env.AI_THINKING_BUDGET || undefined,
     DB_POOL_MAX: process.env.DB_POOL_MAX || undefined,
+    LEADS_MODULE_ENABLED: env("LEADS_MODULE_ENABLED")?.toLowerCase(),
+    SESSION_MAX_AGE_DAYS: env("SESSION_MAX_AGE_DAYS"),
+    STORAGE_DIR: env("STORAGE_DIR"),
+    MAX_UPLOAD_MB: env("MAX_UPLOAD_MB"),
   });
 
   if (!parsed.success) {
@@ -164,6 +172,25 @@ export const serverConfig = {
    * paralelo - o pool enfileira em vez de estourar o limite.
    */
   databasePoolMax: env.DB_POOL_MAX,
+
+  auth: {
+    /** Quanto tempo a sessão sobrevive sem uso. Ela se renova a cada visita. */
+    sessionMaxAgeMs: env.SESSION_MAX_AGE_DAYS * 24 * 60 * 60 * 1000,
+  },
+
+  storage: {
+    /** Pasta em disco onde ficam os arquivos enviados. Fora do versionamento. */
+    dir: env.STORAGE_DIR,
+    maxUploadBytes: env.MAX_UPLOAD_MB * 1024 * 1024,
+    maxUploadMb: env.MAX_UPLOAD_MB,
+  },
+
+  /**
+   * Captação automática de leads (OpenStreetMap, Receita Federal, IA).
+   * Desligada enquanto não houver uma API adequada contratada: o código
+   * continua inteiro, só as rotas e o menu ficam fora do ar.
+   */
+  leadsModuleEnabled: env.LEADS_MODULE_ENABLED,
 
   cnpj: {
     enabled: env.CNPJ_ENABLED,

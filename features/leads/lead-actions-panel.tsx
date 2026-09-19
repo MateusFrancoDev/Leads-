@@ -16,12 +16,11 @@ import {
   analyzeOpportunityAction,
   analyzeWebsiteAction,
   enrichLeadAction,
-  initialLeadActionState,
   toggleFavoriteAction,
   updateLeadStatusAction,
-  type LeadActionState,
 } from "@/server/actions/lead-actions";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER, LeadStatus } from "@/types/lead";
+import { initialLeadActionState, type LeadActionState } from "@/server/actions/leads-action-state";
 
 type LeadAction = (state: LeadActionState, formData: FormData) => Promise<LeadActionState>;
 

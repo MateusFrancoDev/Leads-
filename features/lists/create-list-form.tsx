@@ -6,7 +6,8 @@ import { useActionState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
-import { createListAction, initialListActionState } from "@/server/actions/list-actions";
+import { createListAction } from "@/server/actions/list-actions";
+import { initialListActionState } from "@/server/actions/leads-action-state";
 
 export function CreateListForm() {
   const [state, formAction, pending] = useActionState(createListAction, initialListActionState);

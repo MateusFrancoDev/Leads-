@@ -10,8 +10,9 @@
  */
 
 import { startTransition, useActionState } from "react";
-import { initialLeadActionState, updateLeadStatusAction } from "@/server/actions/lead-actions";
+import { updateLeadStatusAction } from "@/server/actions/lead-actions";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER, type LeadStatus } from "@/types/lead";
+import { initialLeadActionState } from "@/server/actions/leads-action-state";
 
 export function LeadStatusCell({ leadId, status }: { leadId: string; status: LeadStatus }) {
   const [state, dispatch, pending] = useActionState(

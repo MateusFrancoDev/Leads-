@@ -1,69 +1,76 @@
-# Prospecta
+# Lummit
 
-Plataforma de prospecção e captação de leads B2B: encontra empresas **reais** por
-segmento e cidade no OpenStreetMap, lê o site oficial quando ele existe, calcula
-um Lead Score de 0 a 100 e guarda tudo no banco para não repetir consultas.
+Sistema interno da empresa: clientes, projetos, tarefas, financeiro, arquivos,
+anotações, prazos, calendário e histórico de quem fez o quê — tudo em um lugar só.
 
-Nenhuma API paga, nenhuma chave obrigatória e nenhum dado inventado: o que a
-fonte não informa fica `null`.
+É um sistema privado. Não existe cadastro público: os usuários são criados no
+terminal e todas as páginas exigem login.
 
-Stack: Next.js 16 (App Router) · TypeScript · Prisma 7 · PostgreSQL (Supabase) ·
-Tailwind CSS 4 · Zod · Lucide.
+Stack: Next.js 16 (App Router) · TypeScript · Prisma 7 · PostgreSQL ·
+Tailwind CSS 4 · Zod · Lucide. Sem biblioteca de gráficos, de drag-and-drop, de
+modal ou de autenticação — tudo isso é feito com o que o navegador e o Node já têm.
 
 ## Como rodar
 
 1. Instale as dependências: `npm install`
-2. Suba o banco local: `npm run db:local`
+2. Copie `.env.example` para `.env` e ajuste o banco
 3. Aplique o schema: `npm run db:deploy`
-4. Suba o projeto: `npm run dev` e abra http://localhost:3000
-
-Copie `.env.example` para `.env` e ajuste o banco. As variáveis de leads já
-têm padrões que funcionam sem conta em serviço nenhum.
+4. Crie o seu usuário: `npm run user:create`
+5. Suba o projeto: `npm run dev` e abra http://localhost:3000
 
 ### Banco
 
-- **Local (recomendado para uso pessoal)**: `npm run db:local` sobe um Postgres
-  na sua maquina - sem conta, sem Docker. O `.env` já vem apontado para ele.
-  Deixe rodando enquanto usar a aplicação.
-- **Supabase**: troque `DATABASE_URL` pela URL do *pooler* e `DIRECT_URL` pela
-  conexão direta.
+- **Local**: `npm run db:local` sobe um Postgres na sua máquina — sem conta e sem
+  Docker. Deixe rodando enquanto usar a aplicação.
+- **Supabase**: `DATABASE_URL` recebe a URL do *pooler* e `DIRECT_URL` a conexão
+  direta (as migrations usam a direta).
 
-### Fonte de leads
-
-`LEAD_PROVIDER="openstreetmap"` - a única fonte desta versão. Não existe Google
-Places nem provider fictício no fluxo da aplicação.
-
-```
-segmento ("barbearia") -> etiquetas OSM (lib/leads/category-mapper.ts)
-cidade/UF              -> área do município via Nominatim (cache em LocationCache)
-Overpass API           -> estabelecimentos dentro da área (node, way e relation)
-                       -> normalização -> deduplicação -> crawler do site oficial
-                       -> Lead Score -> banco
-```
-
-- **Cache**: `Search.cacheKey` usa o nicho mapeado, então "barbearia",
-  "Barbearias" e "barber shop" dividem o mesmo cache por `LEAD_CACHE_TTL_HOURS`.
-  Cache vencido é devolvido na hora e atualizado em segundo plano.
-- **Overpass**: consulta limitada por área, etiquetas, quantidade e timeout;
-  429/502/503/504/timeout tentam o `OVERPASS_FALLBACK_URL`, até
-  `OVERPASS_MAX_ATTEMPTS`.
-- **Nominatim**: só a cidade é geocodificada (nunca cada empresa), no máximo uma
-  chamada a cada `NOMINATIM_MIN_INTERVAL_MS`, com User-Agent identificável.
-- **Crawler**: visita a home e até `WEBSITE_CRAWLER_MAX_PAGES - 1` páginas de
-  contato/sobre, com concorrência limitada e proteção contra SSRF (só http/https,
-  portas 80/443, IP verificado na conexão, redirects revalidados, limite de bytes).
-- **"Sem site"**: ausência do dado no OSM vira `NOT_PROVIDED` ("Site não
-  informado"), nunca "não tem site". WhatsApp só é "Confirmado" com link
-  wa.me/api.whatsapp.com ou etiqueta explícita; celular sozinho é "Possível".
-
-### API
+### Usuários
 
 ```bash
-curl -X POST http://localhost:3000/api/leads/search   -H "Content-Type: application/json"   -d '{"query":"barbearia","city":"Osasco","state":"SP","limit":50,"hasPhone":true,"websiteStatus":"not_checked","minScore":30}'
+npm run user:create
 ```
 
-Filtros opcionais: `hasPhone`, `hasWhatsapp` (WhatsApp confirmado), `hasInstagram`,
-`hasEmail`, `websiteStatus` (`found` | `not_found` | `not_checked`), `minScore`.
+Pergunta nome, e-mail, cargo e senha no terminal e grava só o hash no banco.
+Nenhuma senha fica em código nem em arquivo de configuração. Cargos:
+administrador, sócio e funcionário.
+
+A senha aparece como asteriscos enquanto é digitada. Nome, e-mail e cargo também
+podem vir por argumento; a senha continua sendo perguntada, para não entrar no
+histórico do terminal:
+
+```bash
+npm run user:create -- --nome "Mateus Franco" --email mateus@empresa.com --cargo admin
+```
+
+## Como a autenticação funciona
+
+- **Senha**: hash `scrypt` do `node:crypto`, com sal aleatório e os parâmetros de
+  custo gravados junto — dá para endurecer o custo depois sem invalidar as senhas
+  existentes (`server/auth/password.ts`).
+- **Sessão**: guardada no banco. O navegador recebe um token aleatório de 32
+  bytes em cookie `HttpOnly`; o banco guarda só o SHA-256 dele. Sair do sistema
+  apaga a linha, então a sessão realmente termina — coisa que um JWT assinado não
+  faria (`server/auth/session.ts`).
+- **Proteção**: `proxy.ts` desvia quem não tem cookie para `/login`, mas ele é
+  conforto de navegação, não segurança. A barreira de verdade é `requireUser()`,
+  chamado em toda página e em todo Server Action, junto dos dados
+  (`server/auth/dal.ts`).
+- **Arquivos**: ficam em `storage/`, fora de `public/`. O download passa por
+  `/api/arquivos/[id]`, que confere a sessão antes de devolver os bytes.
+
+## Módulo de Leads
+
+A captação automática de leads (OpenStreetMap, Dados Abertos do CNPJ,
+enriquecimento de sites, análise por IA, listas de prospecção, mapa) continua
+inteira no projeto, sob `/leads/*`. Ela fica desligada por padrão:
+
+```
+LEADS_MODULE_ENABLED="false"   # menu mostra "Em breve" e as rotas não abrem
+LEADS_MODULE_ENABLED="true"    # módulo volta inteiro, sem alterar código
+```
+
+A documentação desse módulo está em [`docs/leads.md`](docs/leads.md).
 
 ## Scripts
 
@@ -74,80 +81,95 @@ Filtros opcionais: `hasPhone`, `hasWhatsapp` (WhatsApp confirmado), `hasInstagra
 | `npm run typecheck` | TypeScript sem emitir arquivos |
 | `npm run lint` | ESLint |
 | `npm test` | Testes (runner nativo do Node, sem dependências) |
+| `npm run user:create` | Cria um usuário do sistema |
 | `npm run db:local` | Sobe o Postgres local do Prisma |
 | `npm run db:migrate` | Cria e aplica migration (desenvolvimento) |
 | `npm run db:deploy` | Aplica migrations (produção) |
 | `npm run db:studio` | Prisma Studio |
-
-### IA
-
-`AI_PROVIDER=none` (padrão) desliga a funcionalidade e o botão nem aparece.
-`mock` devolve uma análise fictícia sem custo. `anthropic` usa a API da
-Anthropic com `ANTHROPIC_API_KEY`; o modelo (`AI_MODEL`) e o nível de esforço
-(`AI_EFFORT`, de `low` a `max`) são configuraveis - `low` e o padrão porque
-analisar um lead e uma tarefa pequena.
+| `npm run cnpj:import` | Importa Dados Abertos do CNPJ (módulo de leads) |
 
 ## Funcionalidades
 
-**Busca e base de leads**
-- Busca por segmento, cidade e UF, com quantidade máxima e filtros de status do
-  site, telefone, WhatsApp, Instagram, e-mail e score mínimo.
-- Tabela com empresa, segmento, localização, telefone, WhatsApp, site,
-  Instagram, e-mail, score, fonte, status e ações (copiar, abrir WhatsApp,
-  Instagram, site e localização no OpenStreetMap).
-- Origem de cada contato (OpenStreetMap ou site oficial) e etiquetas originais
-  (`rawData`) guardadas no lead.
-- Lead Score de 0 a 100 com os motivos gravados junto ao lead.
-- Mapa dos leads (Leaflet + OpenStreetMap), com os mesmos filtros da tabela.
-- CRM: novo, qualificado, contatado, respondeu, interessado, proposta enviada,
-  cliente, descartado e inválido; favoritos e histórico de atividades.
+**Painel e rotina**
+- Dashboard com clientes, projetos ativos, atrasados e concluídos, valor vendido,
+  recebido, a receber, custos, lucro, margem, tarefas pendentes e pagamentos
+  atrasados.
+- Gráficos de faturamento por mês, receita x custos, lucro por mês, projetos
+  concluídos por mês, projetos por tipo de serviço e rankings de cliente.
+- Ações rápidas: novo cliente, novo projeto, nova tarefa, registrar pagamento e
+  registrar despesa, sem sair da tela.
+- Próximos prazos em 7, 15 e 30 dias.
+- Página **Hoje**: só o que vence hoje ou nos próximos sete dias — tarefas suas e
+  dos outros, pagamentos atrasados e a vencer, entregas próximas e compromissos.
 
-**Trabalho com os leads**
-- Listas de prospecção para agrupar leads por campanha ou região.
-- "Ler site oficial" sob demanda: procura e-mail, telefone, WhatsApp e redes no
-  próprio site.
-- Análise de site: HTTPS, viewport, title, meta description, favicon,
-  formulário, telefone, WhatsApp, Google Analytics e Meta Pixel.
-- Exportação CSV respeitando os filtros da tela.
+**Clientes**
+- Cadastro com contato, WhatsApp, Instagram, site, CPF/CNPJ, cidade e status
+  (lead, em negociação, ativo, projeto concluído, inativo).
+- Ficha do cliente com total faturado, recebido, a receber, custos, lucro, margem
+  e quantidade de projetos, mais abas de projetos, anotações, arquivos e histórico.
+- Depois de cadastrar, o caminho natural é "Criar primeiro projeto".
 
-**IA (opcional, desligada por padrão)**
-- "Analisar oportunidade" gera problemas, oportunidades, serviços e abordagem
-  comercial a partir de um JSON compacto do lead. Nunca cria dados do lead.
-- Cada análise guarda o hash da entrada: repetir sem mudança não gasta token.
+**Projetos**
+- Três formas de ver a mesma lista: cards, tabela e Kanban com arrastar e soltar.
+- Abas por projeto: visão geral, tarefas, financeiro, briefing, contrato,
+  arquivos, anotações, timeline e edição.
+- Prazo calculado sozinho: quantos dias faltam, há quantos dias está atrasado, há
+  quantos dias está em andamento e quanto do prazo já foi usado.
+- Progresso em atalhos (0/25/50/75/100%) ou valor livre; concluir crava 100%.
 
-## Organizacao
+**Financeiro**
+- Várias parcelas por projeto, com forma de pagamento, vencimento e recebimento.
+- Custos por categoria (domínio, hospedagem, API, freelancer, licença...).
+- Lucro e margem por projeto, por cliente, por mês e no geral.
+- "Atrasado" nunca é gravado: é derivado do vencimento, então nenhum job precisa
+  rodar para manter o banco correto.
+
+**Tarefas**
+- Kanban (a fazer, em andamento, em revisão, concluído) com arrastar e soltar, e
+  um seletor de coluna em cada cartão que funciona no celular e no teclado.
+- Responsável por tarefa e atalho "Minhas tarefas".
+
+**Arquivos, anotações e histórico**
+- Arquivos por projeto e por cliente, com categoria (briefing, contrato, design,
+  logo, conteúdo, desenvolvimento, financeiro, entrega).
+- Anotações com autor e data, da mais recente para a mais antiga.
+- Timeline automática por projeto e histórico geral: toda ação vira uma linha com
+  quem fez, o quê e quando.
+
+**Calendário e busca**
+- Calendário mensal com prazos de projeto, prazos de tarefa, vencimentos de
+  parcela e compromissos criados à mão. Prazos são lidos direto da origem, então
+  nunca ficam dessincronizados.
+- Busca global por cliente, empresa, projeto, tarefa, telefone, WhatsApp e e-mail.
+
+## Organização
 
 ```
-app/(dashboard)     paginas do painel (Server Components)
-app/api             route handlers (busca de leads e exportacao CSV)
-components/ui       primitivos visuais reaproveitaveis
-components/layout   navegacao
-features/           UI por dominio (leads, busca, listas, mapa)
-lib/                normalizacao, http, erros, logger, validacao, configuracao
-lib/leads/          busca de leads: fontes, category mapper, crawler, dedupe, score
+app/(app)/          páginas autenticadas (Server Components)
+app/(app)/leads/    módulo de captação de leads, ligado por variável de ambiente
+app/login/          única página pública
+app/api/            route handlers (download de arquivos, API de leads)
+components/ui/      primitivos visuais reaproveitáveis
+components/charts/  gráficos em SVG, escritos à mão
+components/layout/  navegação, busca global e menu do usuário
+features/           UI por domínio (clientes, projetos, tarefas, financeiro...)
+lib/                dinheiro, datas, enums, erros, validação, configuração
+lib/schemas/        schemas Zod de tudo que entra na aplicação
+server/auth/        senha, sessão e camada de acesso autenticado
+server/repositories/ acesso ao banco
+server/services/    regras que não são só leitura (arquivos, histórico)
+server/actions/     Server Actions
 tests/              testes (node --test)
-server/             config, banco, repositorios, providers, ai, services, actions
-types/              contratos compartilhados
 prisma/             schema e migrations
 ```
 
 Regras de arquitetura:
 
-- Componentes React nunca falam com Prisma nem com providers - passam por
-  `server/repositories` e `server/services`.
-- Toda entrada vinda do navegador e validada com Zod (`lib/validation.ts`).
+- Componentes React nunca falam com Prisma — passam por `server/repositories` e
+  `server/services`.
+- Toda página e todo Server Action começa por `requireUser()`. Proteger o layout
+  não protege o dado; quem protege é a consulta.
+- Toda entrada vinda do navegador é validada com Zod antes de tocar no banco.
+- Dinheiro é sempre **centavos** (`Int`). Inteiro não erra centavo em soma e não
+  exige a biblioteca `decimal.js` que o tipo `Decimal` do Prisma puxaria.
 - Nenhuma chave de API chega ao cliente: segredos só existem em `server/`.
-
-## Consultas externas
-
-```
-filtros -> cache de pesquisa (TTL) -> Nominatim (cache) -> Overpass -> normaliza
-        -> deduplica -> lê sites -> score -> persiste -> exibe
-```
-
-- Deduplicação por id OSM, telefone, domínio, nome + endereço e nome +
-  coordenadas próximas; telefone e domínio só contam entre pontos próximos,
-  para não juntar unidades diferentes de uma rede.
-- Site lido há menos de `ENRICHMENT_TTL_HOURS` não é baixado de novo.
-- `ApiUsage` registra cada busca; o dashboard mostra quanto veio do cache.
-- Leads antigos gerados pelo provider fictício ("mock") nunca aparecem.

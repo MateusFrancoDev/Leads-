@@ -23,8 +23,9 @@ import {
 } from "@/lib/leads/filter-options";
 import { BRAZILIAN_STATE_CODES } from "@/lib/normalize";
 import type { LeadFilters } from "@/lib/validation";
-import { initialSearchActionState, runSearchAction } from "@/server/actions/search-actions";
+import { runSearchAction } from "@/server/actions/search-actions";
 import type { SearchHistoryItem } from "@/types/search";
+import { initialSearchActionState } from "@/server/actions/leads-action-state";
 
 const CATEGORY_SUGGESTIONS = listCategoryLabels();
 const SITE_OPTIONS = toSelectOptions(SITE_FILTER_OPTIONS, SITE_FILTER_LABELS);

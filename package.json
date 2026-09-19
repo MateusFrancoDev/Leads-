@@ -15,7 +15,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "cnpj:import": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/ts/register.mjs scripts/cnpj-import.ts"
+    "cnpj:import": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/ts/register.mjs scripts/cnpj-import.ts",
+    "user:create": "node --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/ts/register.mjs scripts/user-create.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.126.0",

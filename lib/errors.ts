@@ -5,6 +5,8 @@
 
 export const APP_ERROR_CODES = [
   "INVALID_INPUT",
+  "UNAUTHORIZED",
+  "FORBIDDEN",
   "NOT_FOUND",
   "PROVIDER_NOT_CONFIGURED",
   "PROVIDER_ERROR",
@@ -20,6 +22,8 @@ export type AppErrorCode = (typeof APP_ERROR_CODES)[number];
 /** Mensagens exibidas ao usuário. Nunca contêm detalhe técnico. */
 export const APP_ERROR_MESSAGES: Record<AppErrorCode, string> = {
   INVALID_INPUT: "Os dados informados não são válidos. Revise os filtros e tente de novo.",
+  UNAUTHORIZED: "Entre no sistema para continuar.",
+  FORBIDDEN: "Você não tem permissão para esta ação.",
   NOT_FOUND: "Não encontramos esse registro.",
   PROVIDER_NOT_CONFIGURED:
     "A fonte de empresas está desligada. Confira LEAD_PROVIDER e OPENSTREETMAP_ENABLED no .env.",

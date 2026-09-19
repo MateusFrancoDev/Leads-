@@ -15,15 +15,9 @@ import { analyzeLeadOpportunity } from "@/server/services/lead-ai-service";
 import { enrichLead } from "@/server/services/lead-enrichment";
 import { analyzeLeadWebsite } from "@/server/services/lead-website-service";
 import { LEAD_STATUS_ORDER, LeadStatus } from "@/types/lead";
+import { type LeadActionState } from "@/server/actions/leads-action-state";
 
 const logger = createLogger("lead-action");
-
-export interface LeadActionState {
-  status: "idle" | "error" | "success";
-  message?: string;
-}
-
-export const initialLeadActionState: LeadActionState = { status: "idle" };
 
 const statusSchema = z.object({
   leadId: z.string().min(1),

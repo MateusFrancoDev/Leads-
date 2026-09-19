@@ -55,3 +55,6 @@ next-env.d.ts
 
 # dados baixados (Dados Abertos do CNPJ)
 /data
+
+# arquivos enviados pelo sistema (contratos, briefings, logos)
+/storage

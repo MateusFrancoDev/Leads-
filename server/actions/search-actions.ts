@@ -17,16 +17,9 @@ import {
   toSearchFilters,
 } from "@/lib/validation";
 import { searchLeads } from "@/server/services/lead-search-service";
+import { type SearchActionState } from "@/server/actions/leads-action-state";
 
 const logger = createLogger("search-action");
-
-export interface SearchActionState {
-  status: "idle" | "error";
-  message?: string;
-  fieldErrors?: Record<string, string>;
-}
-
-export const initialSearchActionState: SearchActionState = { status: "idle" };
 
 export async function runSearchAction(
   _previous: SearchActionState,
@@ -60,5 +53,5 @@ export async function runSearchAction(
 
   // Os filtros de exibição vão na URL: a tabela e renderizada no servidor a
   // partir do banco, sem repetir a consulta à fonte.
-  redirect(`/buscar${buildLeadFiltersQuery(filters, { searchId, max: parsed.data.limit, limit: undefined })}`);
+  redirect(`/leads/buscar${buildLeadFiltersQuery(filters, { searchId, max: parsed.data.limit, limit: undefined })}`);
 }

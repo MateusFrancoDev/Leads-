@@ -74,7 +74,7 @@ export async function LeadsResults({
           description={emptyDescription}
           action={
             emptyAction ?? (
-              <Link href="/buscar" className={buttonClasses("secondary", "sm")}>
+              <Link href="/leads/buscar" className={buttonClasses("secondary", "sm")}>
                 Buscar empresas
               </Link>
             )

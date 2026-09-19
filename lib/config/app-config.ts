@@ -4,8 +4,11 @@
  */
 
 export const APP_CONFIG = {
-  name: "Prospecta",
-  description: "Prospecção e captação de leads B2B",
+  name: "Lummit",
+  description: "Sistema interno da empresa",
+
+  /** Aparece no topo da tela de login. */
+  loginTitle: "Entrar na Lummit",
 
   /** Paginação: nunca renderizar milhares de leads de uma vez. */
   pagination: {

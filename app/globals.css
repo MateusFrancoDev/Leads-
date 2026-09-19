@@ -22,6 +22,19 @@
   --negative-soft: #fdf0ee;
   --warning: #a35b06;
   --warning-soft: #fdf5e7;
+
+  /*
+   * Cores de gráfico. São separadas das cores de interface de propósito: um
+   * acento de UI não precisa se distinguir de outro acento, uma série de
+   * gráfico precisa. Estes valores foram validados para daltonismo (protan,
+   * deutan, tritan) e para contraste sobre a superfície, nos dois temas.
+   */
+  --chart-1: #2a78d6; /* série 1 - receita, faturamento */
+  --chart-2: #eb6834; /* série 2 - custos */
+  --chart-positive: #2a78d6; /* barra acima da linha de base (lucro) */
+  --chart-negative: #e34948; /* barra abaixo da linha de base (prejuízo) */
+  --chart-grid: #ececea;
+  --chart-baseline: #d4d3cd;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +55,13 @@
     --negative-soft: #2a1614;
     --warning: #e0a758;
     --warning-soft: #271c0d;
+
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-positive: #3987e5;
+    --chart-negative: #e66767;
+    --chart-grid: #232328;
+    --chart-baseline: #35353c;
   }
 }
 
@@ -62,6 +82,12 @@
   --color-negative-soft: var(--negative-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-positive: var(--chart-positive);
+  --color-chart-negative: var(--chart-negative);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-baseline: var(--chart-baseline);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

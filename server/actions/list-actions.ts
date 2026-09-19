@@ -14,16 +14,9 @@ import {
   deleteProspectingList,
   removeLeadFromList,
 } from "@/server/repositories/list-repository";
+import { type ListActionState } from "@/server/actions/leads-action-state";
 
 const logger = createLogger("list-action");
-
-export interface ListActionState {
-  status: "idle" | "error" | "success";
-  message?: string;
-  fieldErrors?: Record<string, string>;
-}
-
-export const initialListActionState: ListActionState = { status: "idle" };
 
 export async function createListAction(
   _previous: ListActionState,
@@ -41,7 +34,7 @@ export async function createListAction(
 
   try {
     const list = await createProspectingList(parsed.data);
-    revalidatePath("/listas");
+    revalidatePath("/leads/listas");
     return { status: "success", message: `Lista "${list.name}" criada.` };
   } catch (error) {
     logger.error("falha ao criar lista");
@@ -67,7 +60,7 @@ export async function addLeadToListAction(
   try {
     await addLeadToList(parsed.data.listId, parsed.data.leadId);
     revalidatePath(`/leads/${parsed.data.leadId}`);
-    revalidatePath("/listas");
+    revalidatePath("/leads/listas");
     return { status: "success", message: "Lead adicionado a lista." };
   } catch (error) {
     logger.error("falha ao adicionar a lista");
@@ -87,7 +80,7 @@ export async function removeLeadFromListAction(
 
   try {
     await removeLeadFromList(parsed.data.listId, parsed.data.leadId);
-    revalidatePath(`/listas/${parsed.data.listId}`);
+    revalidatePath(`/leads/listas/${parsed.data.listId}`);
     revalidatePath(`/leads/${parsed.data.leadId}`);
     return { status: "success", message: "Lead removido da lista." };
   } catch (error) {
@@ -113,6 +106,6 @@ export async function deleteListAction(
   }
 
   // A página da lista deixou de existir: volta para o índice.
-  revalidatePath("/listas");
-  redirect("/listas");
+  revalidatePath("/leads/listas");
+  redirect("/leads/listas");
 }
